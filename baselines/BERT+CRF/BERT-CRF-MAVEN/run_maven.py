@@ -50,18 +50,20 @@ from transformers import (
     XLMRobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
+from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+
 from utils_maven import convert_examples_to_features, get_labels, read_examples_from_file
 from bert_crf import *
 
 logger = logging.getLogger(__name__)
 
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (BertConfig, RobertaConfig, DistilBertConfig, CamembertConfig, XLMRobertaConfig)
-    ),
-    (),
-)
+#ALL_MODELS = CONFIG_MAPPING sum(
+#    (
+#        tuple(conf.pretrained_config_archive_map.keys())
+#        for conf in (BertConfig, RobertaConfig, DistilBertConfig, CamembertConfig, XLMRobertaConfig)
+#    ),
+#    (),
+#)
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForTokenClassification, BertTokenizer),
@@ -373,7 +375,7 @@ def main():
                         help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
     parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
                         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(
-                            ALL_MODELS))
+                            CONFIG_MAPPING_NAMES.keys()))
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where the model predictions and checkpoints will be written.")
 

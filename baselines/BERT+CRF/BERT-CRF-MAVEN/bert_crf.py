@@ -1,6 +1,6 @@
 import logging
-from transformers.modeling_bert import BertModel, BertPreTrainedModel
-from transformers.configuration_bert import BertConfig
+from transformers.models.bert import BertModel, BertPreTrainedModel
+from transformers.models.bert import BertConfig
 
 from crf import *
 from utils_maven import to_crf_pad, unpad_crf
