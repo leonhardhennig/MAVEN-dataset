@@ -129,9 +129,10 @@ def convert_examples_to_features(examples,
         label_ids = []
         for word, label in zip(example.words, example.labels):
             word_tokens = tokenizer.tokenize(word)
-            tokens.extend(word_tokens)
-            # Use the real label id for the first token of the word, and padding ids for the remaining tokens
-            label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
+            if len(word_tokens) > 0: # handle special cases like whitespace only tokens
+                tokens.extend(word_tokens)
+                # Use the real label id for the first token of the word, and padding ids for the remaining tokens
+                label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
             #if ex_index == 595 or ex_index == 596:
             #    print(example.words, example.labels)
 
