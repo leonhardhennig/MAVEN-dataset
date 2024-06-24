@@ -44,6 +44,10 @@ class InputExample(object):
         self.labels = labels
 
 
+    def __repr__(self):
+        return f'"id": {self.guid}, "words": {self.words}, "labels": {self.labels}'
+
+
 class InputFeatures(object):
     """A single set of features of data."""
 
@@ -205,7 +209,7 @@ def convert_examples_to_features(examples,
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
-        print(f"Len tokens: {len(tokens)}, Len labels: {len(label_ids)}, idx {ex_index}, example [{example}]")
+        print(f"Len input ids: {len(input_ids)}, Len labels: {len(label_ids)}, idx {ex_index}, example [{example}]")
         assert len(label_ids) == max_seq_length
 
         if ex_index < 0:
