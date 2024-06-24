@@ -54,8 +54,8 @@ class InputFeatures(object):
         self.label_ids = label_ids
 
 
-def read_examples_from_file(data_dir, mode):
-    file_path = os.path.join(data_dir, "{}.jsonl".format(mode))
+def read_examples_from_file(data_dir, mode, filename):
+    file_path = os.path.join(data_dir, "{}.jsonl".format(filename))
     examples = []
     with open(file_path, "r") as fin:
         lines=fin.readlines()

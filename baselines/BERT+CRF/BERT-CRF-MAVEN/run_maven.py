@@ -188,10 +188,10 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if args.local_rank == -1 and args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid")
+                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", filename="valid")
                         if results['f1']>best_dev_f1:
                             best_dev_f1=results['f1']
-                            results_test, _=evaluate(args, model, tokenizer, labels , pad_token_label_id, mode="test")
+                            results_test, _= evaluate(args, model, tokenizer, labels , pad_token_label_id, mode="test", filename="test")
                             logger.info(
                                 "test f1: %s, loss: %s",
                                 str(results_test['f1']),
@@ -241,8 +241,8 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""):
-    eval_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode=mode)
+def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, filename, prefix=""):
+    eval_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode=mode, filename=filename)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
@@ -317,7 +317,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
     return results, preds_list
 
 
-def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
+def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode, filename):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
@@ -333,7 +333,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode)
+        examples = read_examples_from_file(args.data_dir, mode, filename)
         features = convert_examples_to_features(
             examples, 
             labels, 
@@ -523,7 +523,7 @@ def main():
 
     # Training
     if args.do_train:
-        train_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode="train")
+        train_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode="train", filename="train")
         global_step, tr_loss = train(args, train_dataset, ner_model, tokenizer, labels, pad_token_label_id)
         print(" global_step = %s, average loss = %s", global_step, tr_loss)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
@@ -561,7 +561,7 @@ def main():
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", prefix=global_step)
+            result, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", filename="valid", prefix=global_step)
             if global_step:
                 result = {"{}_{}".format(global_step, k): v for k, v in result.items()}
             results.update(result)
@@ -574,7 +574,7 @@ def main():
         tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path, do_lower_case=args.do_lower_case)
         model = model_class.from_pretrained(args.output_dir)
         model.to(args.device)
-        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode=args.test_file)
+        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test", filename=args.test_file)
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
         with open(output_test_predictions_file, "w") as writer:
