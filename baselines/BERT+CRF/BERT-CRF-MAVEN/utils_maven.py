@@ -132,7 +132,7 @@ def convert_examples_to_features(examples,
         if len(tokens) > max_seq_length - special_tokens_count:
             tokens = tokens[:(max_seq_length - special_tokens_count)]
             label_ids = label_ids[:(max_seq_length - special_tokens_count)]
-
+        print(f"Len tokens: {len(tokens)}, Len labels: {len(label_ids)}")
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -201,6 +201,7 @@ def convert_examples_to_features(examples,
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
+        print(f"Len tokens: {len(tokens)}, Len labels: {len(label_ids)}, idx {ex_index}, example [{example}]")
         assert len(label_ids) == max_seq_length
 
         if ex_index < 0:
