@@ -133,15 +133,13 @@ def convert_examples_to_features(examples,
                 tokens.extend(word_tokens)
                 # Use the real label id for the first token of the word, and padding ids for the remaining tokens
                 label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
-            #if ex_index == 595 or ex_index == 596:
-            #    print(example.words, example.labels)
 
         # Account for [CLS] and [SEP] with "- 2" and with "- 3" for RoBERTa.
         special_tokens_count = 3 if sep_token_extra else 2
         if len(tokens) > max_seq_length - special_tokens_count:
             tokens = tokens[:(max_seq_length - special_tokens_count)]
             label_ids = label_ids[:(max_seq_length - special_tokens_count)]
-        print(f"Len tokens: {len(tokens)}, Len labels: {len(label_ids)}")
+
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -210,7 +208,6 @@ def convert_examples_to_features(examples,
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
-        print(f"Len input ids: {len(input_ids)}, Len labels: {len(label_ids)}, idx {ex_index}, example [{example}]")
         assert len(label_ids) == max_seq_length
 
         if ex_index < 0:
