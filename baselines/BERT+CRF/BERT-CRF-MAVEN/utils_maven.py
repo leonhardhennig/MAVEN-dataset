@@ -64,8 +64,10 @@ def read_examples_from_file(data_dir, mode, filename):
             words=[]
             labels=[]
             for sent in doc['content']:
-                words.append(sent['tokens'])
-                labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
+                tokens = sent['tokens']
+                words.append(tokens)
+                #labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
+                labels.append(['O'] * len(tokens))
             if mode!='test':
                 for event in doc['events']:
                     for mention in event['mention']:
@@ -126,6 +128,8 @@ def convert_examples_to_features(examples,
             tokens.extend(word_tokens)
             # Use the real label id for the first token of the word, and padding ids for the remaining tokens
             label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
+            #if ex_index == 595 or ex_index == 596:
+            #    print(example.words, example.labels)
 
         # Account for [CLS] and [SEP] with "- 2" and with "- 3" for RoBERTa.
         special_tokens_count = 3 if sep_token_extra else 2
