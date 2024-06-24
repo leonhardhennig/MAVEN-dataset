@@ -589,7 +589,7 @@ def main():
                     res['predictions']=[]
                     for mention in doc['candidates']:
                         if mention['offset'][1]>len(predictions[Cnt+mention['sent_id']]):
-                            print(len(doc['content'][mention['sent_id']]['tokens']),len(predictions[Cnt+mention['sent_id']]))
+                            print("Warn - candidate mention sent idx not in doc?",len(doc['content'][mention['sent_id']]['tokens']),len(predictions[Cnt+mention['sent_id']]))
                             res['predictions'].append({"id":mention['id'],"type_id":0})
                             continue
                         is_NA=False if predictions[Cnt+mention['sent_id']][mention['offset'][0]].startswith("B") else True
