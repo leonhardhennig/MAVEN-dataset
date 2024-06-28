@@ -281,7 +281,7 @@ class CRF(nn.Module):
                 logger.warning(f"batch_size {batch_size}, seq_len {seq_len}, tag_size {tag_size}")
                 logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
                 #logger.warning(f"end_energy.sum {end_energy.sum()}")
-                gold_score = -1 #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
+                gold_score = 0 #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
         return gold_score
 
     def neg_log_likelihood(self, feats, mask, tags):
@@ -295,8 +295,16 @@ class CRF(nn.Module):
         # if self.average_batch:
         #     return (forward_score - gold_score) / batch_size
         # else:
-        logger.info(f"Scores (forward/gold): {forward_score} / {gold_score}")
-        logger.info(f"Scores : {scores}")
-        logger.info(f"Mask : {mask}")
-        logger.info(f"Tags : {tags}")
+        if torch.isnan(mask).any():
+            logger.info(f"mask nan: {torch.isnan(mask)}")
+        if torch.isinf(mask).any():
+            logger.info(f"mask inf: {torch.isinf(mask)}")
+        if torch.isnan(forward_score).any():
+            logger.info(f"Forward score nan: {torch.isnan(forward_score)}")
+        if torch.isinf(forward_score).any():
+            logger.info(f"Forward score inf: {torch.isinf(forward_score)}")
+        if torch.isnan(scores).any():
+            logger.info(f"Scores nan: {torch.isnan(scores)}")
+        if torch.isinf(scores).any():
+            logger.info(f"Scores inf: {torch.isinf(scores)}")
         return forward_score - gold_score
