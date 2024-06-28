@@ -271,7 +271,7 @@ class CRF(nn.Module):
         except RuntimeError:
             logger.warning("Runtime error when masking tg_energy", exc_info=True)
             logger.warning(f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}") #, content = {tg_energy.}")
-            logger.warning(f"mask shape {mask.shape}, content = {mask}")
+            logger.warning(f"mask shape {mask.shape}") #, content = {mask}")
             logger.warning(f"batch_size {batch_size}, seq_len {seq_len}, tag_size {tag_size}")
             logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
             #logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
