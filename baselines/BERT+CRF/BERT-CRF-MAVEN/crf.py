@@ -295,4 +295,5 @@ class CRF(nn.Module):
         # if self.average_batch:
         #     return (forward_score - gold_score) / batch_size
         # else:
+        logger.info(f"Scores (forward/gold): {forward_score} / {gold_score}")
         return forward_score - gold_score
