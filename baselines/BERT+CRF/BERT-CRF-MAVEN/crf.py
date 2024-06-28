@@ -287,10 +287,10 @@ class CRF(nn.Module):
             logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
             #logger.warning(f"end_energy.sum {end_energy.sum()}")
 
-            tg_energy = tg_energy2.masked_select(mask2.transpose(1, 0))
+            #tg_energy = tg_energy2.masked_select(mask2.transpose(1, 0))
 
             gold_score = 0 #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
-            gold_score = tg_energy.sum() + end_energy.sum()
+            #gold_score = tg_energy.sum() + end_energy.sum()
         return gold_score
 
     def neg_log_likelihood(self, feats, mask, tags):
