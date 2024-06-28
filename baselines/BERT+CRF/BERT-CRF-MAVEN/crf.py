@@ -296,4 +296,7 @@ class CRF(nn.Module):
         #     return (forward_score - gold_score) / batch_size
         # else:
         logger.info(f"Scores (forward/gold): {forward_score} / {gold_score}")
+        logger.info(f"Scores : {scores}")
+        logger.info(f"Mask : {mask}")
+        logger.info(f"Tags : {tags}")
         return forward_score - gold_score
