@@ -259,6 +259,12 @@ class CRF(nn.Module):
                                                                                          batch_size)  # seq_len * bat_size
         ## mask transpose to (seq_len, batch_size)
         try:
+            logger.info(
+                f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}")  # , content = {tg_energy.}")
+            logger.info(f"mask shape {mask.shape}")  # , content = {mask}")
+            logger.info(f"batch_size {batch_size}, seq_len {seq_len}, tag_size {tag_size}")
+            logger.info(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
+            logger.info(f"===========================")
             tg_energy = tg_energy.masked_select(mask.transpose(1, 0))
 
             # ## calculate the score from START_TAG to first label
@@ -269,13 +275,13 @@ class CRF(nn.Module):
             # gold_score = start_energy.sum() + tg_energy.sum() + end_energy.sum()
             gold_score = tg_energy.sum() + end_energy.sum()
         except RuntimeError:
-            logger.warning("Runtime error when masking tg_energy", exc_info=True)
-            logger.warning(f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}") #, content = {tg_energy.}")
-            logger.warning(f"mask shape {mask.shape}") #, content = {mask}")
-            logger.warning(f"batch_size {batch_size}, seq_len {seq_len}, tag_size {tag_size}")
-            logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
-            #logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
-            gold_score = end_energy.sum()
+                logger.warning("Runtime error when masking tg_energy", exc_info=True)
+                logger.warning(f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}") #, content = {tg_energy.}")
+                logger.warning(f"mask shape {mask.shape}") #, content = {mask}")
+                logger.warning(f"batch_size {batch_size}, seq_len {seq_len}, tag_size {tag_size}")
+                logger.warning(f"new_tags shape (should be seq_len, batch_size, 1) {new_tags.shape}")
+                #logger.warning(f"end_energy.sum {end_energy.sum()}")
+                gold_score = -1 #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
         return gold_score
 
     def neg_log_likelihood(self, feats, mask, tags):
