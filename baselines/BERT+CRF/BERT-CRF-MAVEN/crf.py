@@ -295,16 +295,13 @@ class CRF(nn.Module):
         # if self.average_batch:
         #     return (forward_score - gold_score) / batch_size
         # else:
-        if torch.isnan(mask).any():
-            logger.info(f"mask nan: {torch.isnan(mask)}")
-        if torch.isinf(mask).any():
-            logger.info(f"mask inf: {torch.isinf(mask)}")
-        if torch.isnan(forward_score).any():
-            logger.info(f"Forward score nan: {torch.isnan(forward_score)}")
-        if torch.isinf(forward_score).any():
-            logger.info(f"Forward score inf: {torch.isinf(forward_score)}")
-        if torch.isnan(scores).any():
-            logger.info(f"Scores nan: {torch.isnan(scores)}")
-        if torch.isinf(scores).any():
-            logger.info(f"Scores inf: {torch.isinf(scores)}")
+        try:
+            if torch.isfinite(mask).any():
+                logger.info(f"mask not finite: {torch.isnan(mask)}")
+            if torch.isfinite(forward_score).any():
+                logger.info(f"Forward score not finite: {torch.isnan(forward_score)}")
+            if torch.isfinite(scores).any():
+                logger.info(f"Scores not finite: {torch.isnan(scores)}")
+        except:
+            logger.error("error logging tensors", exc_info=True)
         return forward_score - gold_score
