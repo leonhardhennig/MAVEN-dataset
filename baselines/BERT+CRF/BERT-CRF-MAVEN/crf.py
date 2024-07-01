@@ -258,9 +258,10 @@ class CRF(nn.Module):
         tg_energy = torch.gather(scores.view(seq_len, batch_size, -1), 2, new_tags).view(seq_len,
                                                                                          batch_size)  # seq_len * bat_size
         ## mask transpose to (seq_len, batch_size)
-        mask2 = torch.ones_like(mask)
+        #mask2 = torch.ones_like(mask)
         #tg_energy2 = tg_energy.clone().to(tg_energy.device)
-        tg_energy2 = torch.rand_like(tg_energy)
+        #tg_energy2 = torch.rand_like(tg_energy)
+        tg_zeros = torch.zeros_like(tg_energy)
         try:
             #logger.info(
             #    f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}")  # , content = {tg_energy.}")
@@ -290,7 +291,7 @@ class CRF(nn.Module):
 
             #tg_energy = tg_energy2.masked_select(mask2.transpose(1, 0))
 
-            gold_score = torch.zeros_like(tg_energy).sum() #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
+            gold_score = tg_zeros.sum() #torch.zeros(tg_energy.shape)   _like(tg_energy).sum() #end_energy.sum() # probably not the best idea to simply return end_energy.sum()
             #gold_score = tg_energy.sum() + end_energy.sum()
         return gold_score
 
