@@ -262,7 +262,9 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, filename,
     preds = None
     out_label_ids = None
     model.eval()
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
+    for idx, batch in tqdm(enumerate(eval_dataloader), desc="Evaluating"):
+        if idx != 2489:
+            continue
         batch = tuple(t.to(args.device) for t in batch)
 
         with torch.no_grad():
@@ -272,7 +274,11 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, filename,
             if args.model_type != "distilbert":
                 inputs["token_type_ids"] = batch[2] if args.model_type in ["bert", "bertcrf",
                                                                            "xlnet"] else None  # XLM and RoBERTa don"t use segment_ids
-            outputs = model(pad_token_label_id=pad_token_label_id, **inputs)
+            try:
+                outputs = model(pad_token_label_id=pad_token_label_id, **inputs)
+            except RuntimeError:
+                logger.warning(f'Error for batch {idx}', exc_info=True)
+                continue
             tmp_eval_loss, logits, best_path = outputs
 
             if args.n_gpu > 1:
