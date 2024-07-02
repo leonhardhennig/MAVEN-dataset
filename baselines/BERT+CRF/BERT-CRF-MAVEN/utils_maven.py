@@ -69,9 +69,12 @@ def read_examples_from_file(data_dir, mode, filename):
             labels=[]
             for sent in doc['content']:
                 tokens = sent['tokens']
-                words.append(tokens)
-                #labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
-                labels.append(['O'] * len(tokens))
+                if len(tokens) == 0 or len(sent['sentence'].strip()) == 0:
+                    logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
+                else:
+                    words.append(tokens)
+                    #labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
+                    labels.append(['O'] * len(tokens))
             if mode!='test':
                 for event in doc['events']:
                     for mention in event['mention']:
@@ -139,7 +142,8 @@ def convert_examples_to_features(examples,
         if len(tokens) > max_seq_length - special_tokens_count:
             tokens = tokens[:(max_seq_length - special_tokens_count)]
             label_ids = label_ids[:(max_seq_length - special_tokens_count)]
-
+        if len(tokens) == 0:
+            logger.warning(f"Number of tokens is 0 in ex {ex_index}, example {example}")
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]

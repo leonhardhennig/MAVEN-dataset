@@ -263,7 +263,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, filename,
     out_label_ids = None
     model.eval()
     for idx, batch in tqdm(enumerate(eval_dataloader), desc="Evaluating"):
-        if idx != 2489:
+        if idx not in [2487, 2488, 2489, 2490, 2491]:
             continue
         batch = tuple(t.to(args.device) for t in batch)
 
