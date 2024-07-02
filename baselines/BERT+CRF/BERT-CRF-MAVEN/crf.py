@@ -261,7 +261,7 @@ class CRF(nn.Module):
         #mask2 = torch.ones_like(mask)
         #tg_energy2 = tg_energy.clone().to(tg_energy.device)
         #tg_energy2 = torch.rand_like(tg_energy)
-        tg_zeros = torch.zeros_like(tg_energy)
+        tg_zeros = torch.zeros(tg_energy.shape)
         try:
             #logger.info(
             #    f"tg_energy shape (should be seq_len, batch_size, 1) {tg_energy.shape}")  # , content = {tg_energy.}")
