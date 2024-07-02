@@ -279,7 +279,7 @@ class CRF(nn.Module):
             ## add all score together
             # gold_score = start_energy.sum() + tg_energy.sum() + end_energy.sum()
             gold_score = tg_energy.sum() + end_energy.sum()
-            logger.info(f"Gold score shape: {gold_score.shape}")
+            #logger.info(f"Gold score shape: {gold_score.shape}")
         except RuntimeError:
 
             logger.warning("Runtime error when masking tg_energy", exc_info=True)
