@@ -594,21 +594,24 @@ def main():
                     res['id']=doc['id']
                     res['predictions']=[]
                     for mention in doc['candidates']:
-                        if mention['offset'][1]>len(predictions[Cnt+mention['sent_id']]):
-                            logger.warning(f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])}, {len(predictions[Cnt+mention['sent_id']])}")
-                            res['predictions'].append({"id":mention['id'],"type_id":0})
-                            continue
-                        is_NA=False if predictions[Cnt+mention['sent_id']][mention['offset'][0]].startswith("B") else True
-                        if not is_NA:
-                            Type=predictions[Cnt+mention['sent_id']][mention['offset'][0]][2:]
-                            for i in range(mention['offset'][0]+1,mention['offset'][1]):
-                                if predictions[Cnt+mention['sent_id']][i][2:]!=Type:
-                                    is_NA=True
-                                    break
+                        try:
+                            if mention['offset'][1]>len(predictions[Cnt+mention['sent_id']]):
+                                logger.warning(f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])}, {len(predictions[Cnt+mention['sent_id']])}")
+                                res['predictions'].append({"id":mention['id'],"type_id":0})
+                                continue
+                            is_NA=False if predictions[Cnt+mention['sent_id']][mention['offset'][0]].startswith("B") else True
                             if not is_NA:
-                                res['predictions'].append({"id":mention['id'],"type_id":mavenTypes.index(Type)})
-                        if is_NA:
-                            res['predictions'].append({"id":mention['id'],"type_id":0})
+                                Type=predictions[Cnt+mention['sent_id']][mention['offset'][0]][2:]
+                                for i in range(mention['offset'][0]+1,mention['offset'][1]):
+                                    if predictions[Cnt+mention['sent_id']][i][2:]!=Type:
+                                        is_NA=True
+                                        break
+                                if not is_NA:
+                                    res['predictions'].append({"id":mention['id'],"type_id":mavenTypes.index(Type)})
+                            if is_NA:
+                                res['predictions'].append({"id":mention['id'],"type_id":0})
+                        except:
+                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}', exc_info=True)
                     writer.write(json.dumps(res)+"\n")
                     Cnt+=len(doc['content'])
     return results
