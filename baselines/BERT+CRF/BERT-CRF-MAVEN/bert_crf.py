@@ -87,6 +87,7 @@ class BertCRFForTokenClassification(BertPreTrainedModel):
             crf_labels, crf_mask = to_crf_pad(labels, loss_mask, pad_token_label_id)
             crf_logits, _ = to_crf_pad(logits, loss_mask, pad_token_label_id)
 
+            assert crf_mask.sum() > 0, f"crf_mask.sum()={crf_mask.sum()}"
             loss = self.crf.neg_log_likelihood(crf_logits, crf_mask, crf_labels)
             # removing mask stuff from the output path is done later in my_crf_ner but it should be kept away
             # when calculating loss
