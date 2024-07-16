@@ -65,6 +65,17 @@ def convert_to_regular_spaces(text):
     return re.sub(unicode_spaces, ' ', text)
 
 
+def is_empty_sentence(sentence):
+    tokens = sentence['tokens']
+    cleaned_sentence = convert_to_regular_spaces(sentence['sentence'])
+    cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
+    cleaned_tokens = [token for token in cleaned_tokens if len(token) > 0]
+    if len(cleaned_tokens) == 0 or len(cleaned_sentence.strip()) == 0:
+        return True
+    else:
+        return False
+
+
 def read_examples_from_file(data_dir, mode, filename):
     file_path = os.path.join(data_dir, "{}.jsonl".format(filename))
     examples = []
@@ -75,12 +86,7 @@ def read_examples_from_file(data_dir, mode, filename):
             labels = []
             for sent in doc['content']:
                 tokens = sent['tokens']
-                cleaned_sentence = convert_to_regular_spaces(sent['sentence'])
-                cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
-                cleaned_tokens = [token for token in cleaned_tokens if len(token) > 0]
-                if len(tokens) == 0 or len(sent['sentence'].strip()) == 0:
-                    logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
-                elif len(cleaned_sentence.strip()) == 0 or any([len(token) == 0 for token in cleaned_tokens]):
+                if is_empty_sentence(sent):
                     logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
                 else:
                     words.append(tokens)

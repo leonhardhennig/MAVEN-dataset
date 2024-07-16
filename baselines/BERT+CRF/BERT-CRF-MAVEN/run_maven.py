@@ -53,7 +53,7 @@ from transformers import (
 )
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
 
-from utils_maven import convert_examples_to_features, get_labels, read_examples_from_file
+from utils_maven import convert_examples_to_features, get_labels, read_examples_from_file, is_empty_sentence
 from bert_crf import *
 
 logger = logging.getLogger(__name__)
@@ -594,7 +594,6 @@ def main():
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
         wrote_debug_file = False
         with open(output_test_predictions_file, "w") as writer:
-            sents_counter = 0
             mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
                           "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
                           "Perception_active", "Presence", "Influence", "Receiving", "Check", "Hostile_encounter",
@@ -626,10 +625,18 @@ def main():
                           "Risk", "Resolve_problem", "Revenge", "Limiting", "Research", "Having_or_lacking_access",
                           "Theft", "Incident", "Award"]
             with open(os.path.join(args.data_dir, f"{args.test_file}.jsonl"), "r") as fin:
+                sents_counter = 0
                 for line in fin:
                     doc = json.loads(line)
                     res = {'id': doc['id'], 'predictions': []}
-                    for mention_idx, mention in enumerate(doc['candidates']):
+                    # Find empty sentences and adjust the sentence ids of the candidates
+                    mention_candidates = doc['candidates']
+                    for sent_idx, sent in enumerate(doc['content']):
+                        if is_empty_sentence(sent):
+                            for mention in mention_candidates:
+                                if mention['sent_id'] > sent_idx:
+                                    mention['sent_id'] -= 1
+                    for mention_idx, mention in enumerate(mention_candidates):
                         try:
                             global_sent_id = sents_counter + mention['sent_id']
                             if mention['offset'][1] > len(predictions[global_sent_id]):
