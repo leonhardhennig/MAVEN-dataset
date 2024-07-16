@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import copy
 from io import open
 from transformers import XLMRobertaTokenizer, BertTokenizer, RobertaTokenizer
 
@@ -76,6 +77,63 @@ def is_empty_sentence(sentence):
         return False
 
 
+def clean_doc(doc, keep_sent_id=True):
+    # Overengineered cleaning function that removes empty sentences and tokens from a document.
+    # The actual solution seems to be simply removing the empty sentence from the doc with
+    # the following id a2670db15320423957dcecab89d434a3 and keeping the rest of the doc as is.
+    fixed_doc = copy.deepcopy(doc)
+    if fixed_doc['id'] == 'a2670db15320423957dcecab89d434a3':
+        fixed_doc['content'] = fixed_doc['content'][1:]
+        return fixed_doc
+    sentence_deletion_indices = []
+    filtered_mentions = []
+    for mention in fixed_doc['candidates']:
+        if mention['sent_id'] >= len(fixed_doc['content']):
+            logger.warning(f"Mention {mention} with invalid sent_id in doc {fixed_doc['id']}")
+            continue
+        else:
+            sent_tokens = fixed_doc['content'][mention['sent_id']]['tokens']
+            if mention['offset'][1] > len(sent_tokens):
+                logger.warning(f"Mention {mention} with invalid offsets in doc {fixed_doc['id']}")
+                continue
+        filtered_mentions.append(mention)
+    fixed_doc['candidates'] = filtered_mentions
+    for sent_idx, sent in enumerate(fixed_doc['content']):
+        tokens = sent['tokens']
+        cleaned_sentence = convert_to_regular_spaces(sent['sentence'])
+        if cleaned_sentence.strip():
+            cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
+            filtered_tokens = []
+            index_map = {}
+            new_idx = 0
+            # Remove "empty" tokens that only consist of spaces or \n and adjust the offsets accordingly.
+            for token_idx, token in enumerate(cleaned_tokens):
+                index_map[token_idx] = new_idx
+                if token.strip():
+                    filtered_tokens.append(token)
+                    new_idx += 1
+                else:
+                    logger.warning(f"Empty token in sentence {sent['sentence']} at index {token_idx}")
+
+            for mention in fixed_doc['candidates']:
+                if mention['sent_id'] == sent_idx:
+                    if mention['offset'][0] in index_map and mention['offset'][1] in index_map:
+                        mention['offset'][0] = index_map[mention['offset'][0]]
+                        mention['offset'][1] = index_map[mention['offset'][1]]
+                    else:
+                        logger.warning(f"Mention {mention} with invalid offsets in doc {fixed_doc['id']}")
+        else:
+            # Skip empty sentences and adjust the sent_id of the mentions in the sentences that follow.
+            logger.warning(f"Empty sentence {sent['sentence']} in doc {fixed_doc['id']}")
+            sentence_deletion_indices.append(sent_idx)
+    for sent_idx in sentence_deletion_indices:
+        fixed_doc['content'].pop(sent_idx)
+        for mention in fixed_doc['candidates']:
+            if mention['sent_id'] > sent_idx:
+                mention['sent_id'] -= 1
+    return fixed_doc
+
+
 def read_examples_from_file(data_dir, mode, filename):
     file_path = os.path.join(data_dir, "{}.jsonl".format(filename))
     examples = []
@@ -90,7 +148,6 @@ def read_examples_from_file(data_dir, mode, filename):
                     logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
                 else:
                     words.append(tokens)
-                    #labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
                     labels.append(['O'] * len(tokens))
             if mode != 'test':
                 for event in doc['events']:
