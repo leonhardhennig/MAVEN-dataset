@@ -19,6 +19,7 @@ from __future__ import absolute_import, division, print_function
 import json
 import logging
 import os
+import re
 from io import open
 from transformers import XLMRobertaTokenizer, BertTokenizer, RobertaTokenizer
 
@@ -43,7 +44,6 @@ class InputExample(object):
         self.words = words
         self.labels = labels
 
-
     def __repr__(self):
         return f'"id": {self.guid}, "words": {self.words}, "labels": {self.labels}'
 
@@ -58,37 +58,48 @@ class InputFeatures(object):
         self.label_ids = label_ids
 
 
+def convert_to_regular_spaces(text):
+    # Define a regex pattern that includes all the special Unicode space characters.
+    unicode_spaces = r'[\u0020\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u202F\u205F\u3000]'
+    # Replace all occurrences of these characters with a regular space.
+    return re.sub(unicode_spaces, ' ', text)
+
+
 def read_examples_from_file(data_dir, mode, filename):
     file_path = os.path.join(data_dir, "{}.jsonl".format(filename))
     examples = []
-    with open(file_path, "r") as fin:
-        lines=fin.readlines()
-        for line in lines:
-            doc=json.loads(line)
-            words=[]
-            labels=[]
+    with open(file_path, "r", encoding="utf8") as fin:
+        for line in fin:
+            doc = json.loads(line)
+            words = []
+            labels = []
             for sent in doc['content']:
                 tokens = sent['tokens']
+                cleaned_sentence = convert_to_regular_spaces(sent['sentence'])
+                cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
+                cleaned_tokens = [token for token in cleaned_tokens if len(token) > 0]
                 if len(tokens) == 0 or len(sent['sentence'].strip()) == 0:
+                    logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
+                elif len(cleaned_sentence.strip()) == 0 or any([len(token) == 0 for token in cleaned_tokens]):
                     logger.warning(f"Discarding invalid sentence {sent} from doc {doc['id']}")
                 else:
                     words.append(tokens)
                     #labels.append(['O' for i in range(0,len(sent['tokens']))])#TBD
                     labels.append(['O'] * len(tokens))
-            if mode!='test':
+            if mode != 'test':
                 for event in doc['events']:
                     for mention in event['mention']:
-                        labels[mention['sent_id']][mention['offset'][0]]="B-"+event['type']
-                        for i in range(mention['offset'][0]+1,mention['offset'][1]):
-                            labels[mention['sent_id']][i]="I-"+event['type']
+                        labels[mention['sent_id']][mention['offset'][0]] = "B-" + event['type']
+                        for i in range(mention['offset'][0] + 1, mention['offset'][1]):
+                            labels[mention['sent_id']][i] = "I-" + event['type']
                 for mention in doc['negative_triggers']:
-                    labels[mention['sent_id']][mention['offset'][0]]="O"
-                    for i in range(mention['offset'][0]+1,mention['offset'][1]):
-                        labels[mention['sent_id']][i]="O"
-            for i in range(0,len(words)):
-                examples.append(InputExample(guid="%s-%s-%d"%(mode,doc['id'],i),
-                                            words=words[i],
-                                            labels=labels[i]))
+                    labels[mention['sent_id']][mention['offset'][0]] = "O"
+                    for i in range(mention['offset'][0] + 1, mention['offset'][1]):
+                        labels[mention['sent_id']][i] = "O"
+            for i in range(0, len(words)):
+                examples.append(InputExample(guid="%s-%s-%d" % (mode, doc['id'], i),
+                                             words=words[i],
+                                             labels=labels[i]))
     return examples
 
 
@@ -132,7 +143,7 @@ def convert_examples_to_features(examples,
         label_ids = []
         for word, label in zip(example.words, example.labels):
             word_tokens = tokenizer.tokenize(word)
-            if len(word_tokens) > 0: # handle special cases like whitespace only tokens
+            if len(word_tokens) > 0:  # handle special cases like whitespace only tokens
                 tokens.extend(word_tokens)
                 # Use the real label id for the first token of the word, and padding ids for the remaining tokens
                 label_ids.extend([label_map[label]] + [pad_token_label_id] * (len(word_tokens) - 1))
@@ -232,7 +243,64 @@ def convert_examples_to_features(examples,
 
 
 def get_labels(path):
-    return ["O", "B-Know", "I-Know", "B-Warning", "I-Warning", "B-Catastrophe", "I-Catastrophe", "B-Placing", "I-Placing", "B-Causation", "I-Causation", "B-Arriving", "I-Arriving", "B-Sending", "I-Sending", "B-Protest", "I-Protest", "B-Preventing_or_letting", "I-Preventing_or_letting", "B-Motion", "I-Motion", "B-Damaging", "I-Damaging", "B-Destroying", "I-Destroying", "B-Death", "I-Death", "B-Perception_active", "I-Perception_active", "B-Presence", "I-Presence", "B-Influence", "I-Influence", "B-Receiving", "I-Receiving", "B-Check", "I-Check", "B-Hostile_encounter", "I-Hostile_encounter", "B-Killing", "I-Killing", "B-Conquering", "I-Conquering", "B-Releasing", "I-Releasing", "B-Attack", "I-Attack", "B-Earnings_and_losses", "I-Earnings_and_losses", "B-Choosing", "I-Choosing", "B-Traveling", "I-Traveling", "B-Recovering", "I-Recovering", "B-Using", "I-Using", "B-Coming_to_be", "I-Coming_to_be", "B-Cause_to_be_included", "I-Cause_to_be_included", "B-Process_start", "I-Process_start", "B-Change_event_time", "I-Change_event_time", "B-Reporting", "I-Reporting", "B-Bodily_harm", "I-Bodily_harm", "B-Suspicion", "I-Suspicion", "B-Statement", "I-Statement", "B-Cause_change_of_position_on_a_scale", "I-Cause_change_of_position_on_a_scale", "B-Coming_to_believe", "I-Coming_to_believe", "B-Expressing_publicly", "I-Expressing_publicly", "B-Request", "I-Request", "B-Control", "I-Control", "B-Supporting", "I-Supporting", "B-Defending", "I-Defending", "B-Building", "I-Building", "B-Military_operation", "I-Military_operation", "B-Self_motion", "I-Self_motion", "B-GetReady", "I-GetReady", "B-Forming_relationships", "I-Forming_relationships", "B-Becoming_a_member", "I-Becoming_a_member", "B-Action", "I-Action", "B-Removing", "I-Removing", "B-Surrendering", "I-Surrendering", "B-Agree_or_refuse_to_act", "I-Agree_or_refuse_to_act", "B-Participation", "I-Participation", "B-Deciding", "I-Deciding", "B-Education_teaching", "I-Education_teaching", "B-Emptying", "I-Emptying", "B-Getting", "I-Getting", "B-Besieging", "I-Besieging", "B-Creating", "I-Creating", "B-Process_end", "I-Process_end", "B-Body_movement", "I-Body_movement", "B-Expansion", "I-Expansion", "B-Telling", "I-Telling", "B-Change", "I-Change", "B-Legal_rulings", "I-Legal_rulings", "B-Bearing_arms", "I-Bearing_arms", "B-Giving", "I-Giving", "B-Name_conferral", "I-Name_conferral", "B-Arranging", "I-Arranging", "B-Use_firearm", "I-Use_firearm", "B-Committing_crime", "I-Committing_crime", "B-Assistance", "I-Assistance", "B-Surrounding", "I-Surrounding", "B-Quarreling", "I-Quarreling", "B-Expend_resource", "I-Expend_resource", "B-Motion_directional", "I-Motion_directional", "B-Bringing", "I-Bringing", "B-Communication", "I-Communication", "B-Containing", "I-Containing", "B-Manufacturing", "I-Manufacturing", "B-Social_event", "I-Social_event", "B-Robbery", "I-Robbery", "B-Competition", "I-Competition", "B-Writing", "I-Writing", "B-Rescuing", "I-Rescuing", "B-Judgment_communication", "I-Judgment_communication", "B-Change_tool", "I-Change_tool", "B-Hold", "I-Hold", "B-Being_in_operation", "I-Being_in_operation", "B-Recording", "I-Recording", "B-Carry_goods", "I-Carry_goods", "B-Cost", "I-Cost", "B-Departing", "I-Departing", "B-GiveUp", "I-GiveUp", "B-Change_of_leadership", "I-Change_of_leadership", "B-Escaping", "I-Escaping", "B-Aiming", "I-Aiming", "B-Hindering", "I-Hindering", "B-Preserving", "I-Preserving", "B-Create_artwork", "I-Create_artwork", "B-Openness", "I-Openness", "B-Connect", "I-Connect", "B-Reveal_secret", "I-Reveal_secret", "B-Response", "I-Response", "B-Scrutiny", "I-Scrutiny", "B-Lighting", "I-Lighting", "B-Criminal_investigation", "I-Criminal_investigation", "B-Hiding_objects", "I-Hiding_objects", "B-Confronting_problem", "I-Confronting_problem", "B-Renting", "I-Renting", "B-Breathing", "I-Breathing", "B-Patrolling", "I-Patrolling", "B-Arrest", "I-Arrest", "B-Convincing", "I-Convincing", "B-Commerce_sell", "I-Commerce_sell", "B-Cure", "I-Cure", "B-Temporary_stay", "I-Temporary_stay", "B-Dispersal", "I-Dispersal", "B-Collaboration", "I-Collaboration", "B-Extradition", "I-Extradition", "B-Change_sentiment", "I-Change_sentiment", "B-Commitment", "I-Commitment", "B-Commerce_pay", "I-Commerce_pay", "B-Filling", "I-Filling", "B-Becoming", "I-Becoming", "B-Achieve", "I-Achieve", "B-Practice", "I-Practice", "B-Cause_change_of_strength", "I-Cause_change_of_strength", "B-Supply", "I-Supply", "B-Cause_to_amalgamate", "I-Cause_to_amalgamate", "B-Scouring", "I-Scouring", "B-Violence", "I-Violence", "B-Reforming_a_system", "I-Reforming_a_system", "B-Come_together", "I-Come_together", "B-Wearing", "I-Wearing", "B-Cause_to_make_progress", "I-Cause_to_make_progress", "B-Legality", "I-Legality", "B-Employment", "I-Employment", "B-Rite", "I-Rite", "B-Publishing", "I-Publishing", "B-Adducing", "I-Adducing", "B-Exchange", "I-Exchange", "B-Ratification", "I-Ratification", "B-Sign_agreement", "I-Sign_agreement", "B-Commerce_buy", "I-Commerce_buy", "B-Imposing_obligation", "I-Imposing_obligation", "B-Rewards_and_punishments", "I-Rewards_and_punishments", "B-Institutionalization", "I-Institutionalization", "B-Testing", "I-Testing", "B-Ingestion", "I-Ingestion", "B-Labeling", "I-Labeling", "B-Kidnapping", "I-Kidnapping", "B-Submitting_documents", "I-Submitting_documents", "B-Prison", "I-Prison", "B-Justifying", "I-Justifying", "B-Emergency", "I-Emergency", "B-Terrorism", "I-Terrorism", "B-Vocalizations", "I-Vocalizations", "B-Risk", "I-Risk", "B-Resolve_problem", "I-Resolve_problem", "B-Revenge", "I-Revenge", "B-Limiting", "I-Limiting", "B-Research", "I-Research", "B-Having_or_lacking_access", "I-Having_or_lacking_access", "B-Theft", "I-Theft", "B-Incident", "I-Incident", "B-Award", "I-Award"]
+    return ["O", "B-Know", "I-Know", "B-Warning", "I-Warning", "B-Catastrophe", "I-Catastrophe", "B-Placing",
+            "I-Placing", "B-Causation", "I-Causation", "B-Arriving", "I-Arriving", "B-Sending", "I-Sending",
+            "B-Protest", "I-Protest", "B-Preventing_or_letting", "I-Preventing_or_letting", "B-Motion", "I-Motion",
+            "B-Damaging", "I-Damaging", "B-Destroying", "I-Destroying", "B-Death", "I-Death", "B-Perception_active",
+            "I-Perception_active", "B-Presence", "I-Presence", "B-Influence", "I-Influence", "B-Receiving",
+            "I-Receiving", "B-Check", "I-Check", "B-Hostile_encounter", "I-Hostile_encounter", "B-Killing", "I-Killing",
+            "B-Conquering", "I-Conquering", "B-Releasing", "I-Releasing", "B-Attack", "I-Attack",
+            "B-Earnings_and_losses", "I-Earnings_and_losses", "B-Choosing", "I-Choosing", "B-Traveling", "I-Traveling",
+            "B-Recovering", "I-Recovering", "B-Using", "I-Using", "B-Coming_to_be", "I-Coming_to_be",
+            "B-Cause_to_be_included", "I-Cause_to_be_included", "B-Process_start", "I-Process_start",
+            "B-Change_event_time", "I-Change_event_time", "B-Reporting", "I-Reporting", "B-Bodily_harm",
+            "I-Bodily_harm", "B-Suspicion", "I-Suspicion", "B-Statement", "I-Statement",
+            "B-Cause_change_of_position_on_a_scale", "I-Cause_change_of_position_on_a_scale", "B-Coming_to_believe",
+            "I-Coming_to_believe", "B-Expressing_publicly", "I-Expressing_publicly", "B-Request", "I-Request",
+            "B-Control", "I-Control", "B-Supporting", "I-Supporting", "B-Defending", "I-Defending", "B-Building",
+            "I-Building", "B-Military_operation", "I-Military_operation", "B-Self_motion", "I-Self_motion",
+            "B-GetReady", "I-GetReady", "B-Forming_relationships", "I-Forming_relationships", "B-Becoming_a_member",
+            "I-Becoming_a_member", "B-Action", "I-Action", "B-Removing", "I-Removing", "B-Surrendering",
+            "I-Surrendering", "B-Agree_or_refuse_to_act", "I-Agree_or_refuse_to_act", "B-Participation",
+            "I-Participation", "B-Deciding", "I-Deciding", "B-Education_teaching", "I-Education_teaching", "B-Emptying",
+            "I-Emptying", "B-Getting", "I-Getting", "B-Besieging", "I-Besieging", "B-Creating", "I-Creating",
+            "B-Process_end", "I-Process_end", "B-Body_movement", "I-Body_movement", "B-Expansion", "I-Expansion",
+            "B-Telling", "I-Telling", "B-Change", "I-Change", "B-Legal_rulings", "I-Legal_rulings", "B-Bearing_arms",
+            "I-Bearing_arms", "B-Giving", "I-Giving", "B-Name_conferral", "I-Name_conferral", "B-Arranging",
+            "I-Arranging", "B-Use_firearm", "I-Use_firearm", "B-Committing_crime", "I-Committing_crime", "B-Assistance",
+            "I-Assistance", "B-Surrounding", "I-Surrounding", "B-Quarreling", "I-Quarreling", "B-Expend_resource",
+            "I-Expend_resource", "B-Motion_directional", "I-Motion_directional", "B-Bringing", "I-Bringing",
+            "B-Communication", "I-Communication", "B-Containing", "I-Containing", "B-Manufacturing", "I-Manufacturing",
+            "B-Social_event", "I-Social_event", "B-Robbery", "I-Robbery", "B-Competition", "I-Competition", "B-Writing",
+            "I-Writing", "B-Rescuing", "I-Rescuing", "B-Judgment_communication", "I-Judgment_communication",
+            "B-Change_tool", "I-Change_tool", "B-Hold", "I-Hold", "B-Being_in_operation", "I-Being_in_operation",
+            "B-Recording", "I-Recording", "B-Carry_goods", "I-Carry_goods", "B-Cost", "I-Cost", "B-Departing",
+            "I-Departing", "B-GiveUp", "I-GiveUp", "B-Change_of_leadership", "I-Change_of_leadership", "B-Escaping",
+            "I-Escaping", "B-Aiming", "I-Aiming", "B-Hindering", "I-Hindering", "B-Preserving", "I-Preserving",
+            "B-Create_artwork", "I-Create_artwork", "B-Openness", "I-Openness", "B-Connect", "I-Connect",
+            "B-Reveal_secret", "I-Reveal_secret", "B-Response", "I-Response", "B-Scrutiny", "I-Scrutiny", "B-Lighting",
+            "I-Lighting", "B-Criminal_investigation", "I-Criminal_investigation", "B-Hiding_objects",
+            "I-Hiding_objects", "B-Confronting_problem", "I-Confronting_problem", "B-Renting", "I-Renting",
+            "B-Breathing", "I-Breathing", "B-Patrolling", "I-Patrolling", "B-Arrest", "I-Arrest", "B-Convincing",
+            "I-Convincing", "B-Commerce_sell", "I-Commerce_sell", "B-Cure", "I-Cure", "B-Temporary_stay",
+            "I-Temporary_stay", "B-Dispersal", "I-Dispersal", "B-Collaboration", "I-Collaboration", "B-Extradition",
+            "I-Extradition", "B-Change_sentiment", "I-Change_sentiment", "B-Commitment", "I-Commitment",
+            "B-Commerce_pay", "I-Commerce_pay", "B-Filling", "I-Filling", "B-Becoming", "I-Becoming", "B-Achieve",
+            "I-Achieve", "B-Practice", "I-Practice", "B-Cause_change_of_strength", "I-Cause_change_of_strength",
+            "B-Supply", "I-Supply", "B-Cause_to_amalgamate", "I-Cause_to_amalgamate", "B-Scouring", "I-Scouring",
+            "B-Violence", "I-Violence", "B-Reforming_a_system", "I-Reforming_a_system", "B-Come_together",
+            "I-Come_together", "B-Wearing", "I-Wearing", "B-Cause_to_make_progress", "I-Cause_to_make_progress",
+            "B-Legality", "I-Legality", "B-Employment", "I-Employment", "B-Rite", "I-Rite", "B-Publishing",
+            "I-Publishing", "B-Adducing", "I-Adducing", "B-Exchange", "I-Exchange", "B-Ratification", "I-Ratification",
+            "B-Sign_agreement", "I-Sign_agreement", "B-Commerce_buy", "I-Commerce_buy", "B-Imposing_obligation",
+            "I-Imposing_obligation", "B-Rewards_and_punishments", "I-Rewards_and_punishments", "B-Institutionalization",
+            "I-Institutionalization", "B-Testing", "I-Testing", "B-Ingestion", "I-Ingestion", "B-Labeling",
+            "I-Labeling", "B-Kidnapping", "I-Kidnapping", "B-Submitting_documents", "I-Submitting_documents",
+            "B-Prison", "I-Prison", "B-Justifying", "I-Justifying", "B-Emergency", "I-Emergency", "B-Terrorism",
+            "I-Terrorism", "B-Vocalizations", "I-Vocalizations", "B-Risk", "I-Risk", "B-Resolve_problem",
+            "I-Resolve_problem", "B-Revenge", "I-Revenge", "B-Limiting", "I-Limiting", "B-Research", "I-Research",
+            "B-Having_or_lacking_access", "I-Having_or_lacking_access", "B-Theft", "I-Theft", "B-Incident",
+            "I-Incident", "B-Award", "I-Award"]
 
 
 def to_crf_pad(org_array, org_mask, pad_label_id):
