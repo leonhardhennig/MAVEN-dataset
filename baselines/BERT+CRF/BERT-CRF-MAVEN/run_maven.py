@@ -647,10 +647,10 @@ def main():
                                 if not wrote_debug_file:
                                     with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
                                         debug_dict = {
-                                            "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
-                                                f"Additional infos: \n"
-                                                f"{global_sent_id=}, {len(predictions)=}\n"
-                                                f"{predictions=}, {np.array(predictions).shape=}",
+                                            "message":
+                                                f"Candidate mention sent idx not in doc? "
+                                                f"{len(doc['content'][mention['sent_id']]['tokens'])=}, "
+                                                f"{len(predictions[global_sent_id])=}",
                                             "doc": doc,
                                             "mention": mention,
                                             "sents_counter": sents_counter,
@@ -673,10 +673,20 @@ def main():
                             if is_NA:
                                 res['predictions'].append({"id": mention['id'], "type_id": 0})
                         except:
-                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}. '
-                                           f'Additional infos: \n'
-                                           f'{sents_counter + mention["sent_id"]=}, {len(predictions)=}\n'
-                                           f'{predictions=}',
+                            # DEBUG: there are a lot of mentions that are skipped like this
+                            if not wrote_debug_file:
+                                with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
+                                    debug_dict = {
+                                        "message": f"Error during labeling candidates for mention {mention} in doc {doc}.",
+                                        "doc": doc,
+                                        "mention": mention,
+                                        "sents_counter": sents_counter,
+                                        "predictions": predictions
+                                    }
+                                    pickle.dump(debug_dict, debug)
+                                wrote_debug_file = True
+                            # END OF DEBUG
+                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}.',
                                            exc_info=True)
                     writer.write(json.dumps(res) + "\n")
                     sents_counter += len(doc['content'])
