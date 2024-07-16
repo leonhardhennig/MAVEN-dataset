@@ -19,6 +19,7 @@ import argparse
 import glob
 import logging
 import os
+import pickle
 import random
 import json
 
@@ -86,7 +87,7 @@ def set_seed(args):
 def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     """ Train the model """
     #/if args.local_rank in [-1, 0]:
-        #tb_writer = SummaryWriter()
+    #tb_writer = SummaryWriter()
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -95,7 +96,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
         sampler=train_sampler,
         batch_size=args.train_batch_size,
     )
-    best_dev_f1=0.0
+    best_dev_f1 = 0.0
     if args.max_steps > 0:
         t_total = args.max_steps
         args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
@@ -188,17 +189,19 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if args.local_rank == -1 and args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", filename="valid")
-                        if results['f1']>best_dev_f1:
-                            best_dev_f1=results['f1']
-                            results_test, _= evaluate(args, model, tokenizer, labels , pad_token_label_id, mode="test", filename="test")
+                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid",
+                                              filename="valid")
+                        if results['f1'] > best_dev_f1:
+                            best_dev_f1 = results['f1']
+                            results_test, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test",
+                                                       filename="test")
                             logger.info(
                                 "test f1: %s, loss: %s",
                                 str(results_test['f1']),
                                 str(results_test['loss']),
                             )
                         #for key, value in results.items():
-                            #tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                        #tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     #tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     #tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logging_loss = tr_loss
@@ -208,7 +211,8 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                     output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
-                    model_to_save = model.module if hasattr(model, "module") else model  # Take care of distributed/parallel training
+                    model_to_save = model.module if hasattr(model,
+                                                            "module") else model  # Take care of distributed/parallel training
 
                     logger.info("Saving model checkpoint to %s", output_dir)
 
@@ -329,10 +333,10 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode, f
 
     # Load data features from cache or dataset file
     cached_features_file = os.path.join(
-        args.data_dir, 
+        args.data_dir,
         "cached_{}_{}_{}_{}".format(mode, filename,
-        list(filter(None,args.model_name_or_path.split("/"))).pop(),
-        str(args.max_seq_length))
+                                    list(filter(None, args.model_name_or_path.split("/"))).pop(),
+                                    str(args.max_seq_length))
     )
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
@@ -341,15 +345,16 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode, f
         logger.info("Creating features from dataset file at %s", args.data_dir)
         examples = read_examples_from_file(args.data_dir, mode, filename)
         features = convert_examples_to_features(
-            examples, 
-            labels, 
+            examples,
+            labels,
             args.max_seq_length, tokenizer,
-            cls_token_at_end=bool(args.model_type in ["xlnet"]),# xlnet has a cls token at the end
+            cls_token_at_end=bool(args.model_type in ["xlnet"]),  # xlnet has a cls token at the end
             cls_token=tokenizer.cls_token,
             cls_token_segment_id=2 if args.model_type in ["xlnet"] else 0,
             sep_token=tokenizer.sep_token,
-            sep_token_extra=bool(args.model_type in ["roberta"]),# roberta uses an extra separator b/w pairs of sentences, cf. github.com/pytorch/fairseq/commit/1684e166e3da03f5b600dbb7855cb98ddfcd0805
-            pad_on_left=bool(args.model_type in ["xlnet"]), # pad on the left for xlnet
+            sep_token_extra=bool(args.model_type in ["roberta"]),
+            # roberta uses an extra separator b/w pairs of sentences, cf. github.com/pytorch/fairseq/commit/1684e166e3da03f5b600dbb7855cb98ddfcd0805
+            pad_on_left=bool(args.model_type in ["xlnet"]),  # pad on the left for xlnet
             pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
             pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
             pad_token_label_id=pad_token_label_id
@@ -529,7 +534,8 @@ def main():
 
     # Training
     if args.do_train:
-        train_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode="train", filename="train")
+        train_dataset = load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode="train",
+                                                filename="train")
         global_step, tr_loss = train(args, train_dataset, ner_model, tokenizer, labels, pad_token_label_id)
         print(" global_step = %s, average loss = %s", global_step, tr_loss)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
@@ -567,7 +573,8 @@ def main():
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", filename="valid", prefix=global_step)
+            result, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="valid", filename="valid",
+                                 prefix=global_step)
             if global_step:
                 result = {"{}_{}".format(global_step, k): v for k, v in result.items()}
             results.update(result)
@@ -577,43 +584,95 @@ def main():
                 writer.write("{} = {}\n".format(key, str(results[key])))
 
     if args.do_infer and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path, do_lower_case=args.do_lower_case)
+        tokenizer = tokenizer_class.from_pretrained(
+            args.tokenizer_name if args.tokenizer_name else args.model_name_or_path, do_lower_case=args.do_lower_case)
         model = model_class.from_pretrained(args.output_dir)
         model.to(args.device)
-        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test", filename=args.test_file)
+        result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test",
+                                       filename=args.test_file)
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
+        wrote_debug_file = False
         with open(output_test_predictions_file, "w") as writer:
-            Cnt=0
-            mavenTypes=["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending", "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death", "Perception_active", "Presence", "Influence", "Receiving", "Check", "Hostile_encounter", "Killing", "Conquering", "Releasing", "Attack", "Earnings_and_losses", "Choosing", "Traveling", "Recovering", "Using", "Coming_to_be", "Cause_to_be_included", "Process_start", "Change_event_time", "Reporting", "Bodily_harm", "Suspicion", "Statement", "Cause_change_of_position_on_a_scale", "Coming_to_believe", "Expressing_publicly", "Request", "Control", "Supporting", "Defending", "Building", "Military_operation", "Self_motion", "GetReady", "Forming_relationships", "Becoming_a_member", "Action", "Removing", "Surrendering", "Agree_or_refuse_to_act", "Participation", "Deciding", "Education_teaching", "Emptying", "Getting", "Besieging", "Creating", "Process_end", "Body_movement", "Expansion", "Telling", "Change", "Legal_rulings", "Bearing_arms", "Giving", "Name_conferral", "Arranging", "Use_firearm", "Committing_crime", "Assistance", "Surrounding", "Quarreling", "Expend_resource", "Motion_directional", "Bringing", "Communication", "Containing", "Manufacturing", "Social_event", "Robbery", "Competition", "Writing", "Rescuing", "Judgment_communication", "Change_tool", "Hold", "Being_in_operation", "Recording", "Carry_goods", "Cost", "Departing", "GiveUp", "Change_of_leadership", "Escaping", "Aiming", "Hindering", "Preserving", "Create_artwork", "Openness", "Connect", "Reveal_secret", "Response", "Scrutiny", "Lighting", "Criminal_investigation", "Hiding_objects", "Confronting_problem", "Renting", "Breathing", "Patrolling", "Arrest", "Convincing", "Commerce_sell", "Cure", "Temporary_stay", "Dispersal", "Collaboration", "Extradition", "Change_sentiment", "Commitment", "Commerce_pay", "Filling", "Becoming", "Achieve", "Practice", "Cause_change_of_strength", "Supply", "Cause_to_amalgamate", "Scouring", "Violence", "Reforming_a_system", "Come_together", "Wearing", "Cause_to_make_progress", "Legality", "Employment", "Rite", "Publishing", "Adducing", "Exchange", "Ratification", "Sign_agreement", "Commerce_buy", "Imposing_obligation", "Rewards_and_punishments", "Institutionalization", "Testing", "Ingestion", "Labeling", "Kidnapping", "Submitting_documents", "Prison", "Justifying", "Emergency", "Terrorism", "Vocalizations", "Risk", "Resolve_problem", "Revenge", "Limiting", "Research", "Having_or_lacking_access", "Theft", "Incident", "Award"]
+            sents_counter = 0
+            mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
+                          "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
+                          "Perception_active", "Presence", "Influence", "Receiving", "Check", "Hostile_encounter",
+                          "Killing", "Conquering", "Releasing", "Attack", "Earnings_and_losses", "Choosing",
+                          "Traveling", "Recovering", "Using", "Coming_to_be", "Cause_to_be_included", "Process_start",
+                          "Change_event_time", "Reporting", "Bodily_harm", "Suspicion", "Statement",
+                          "Cause_change_of_position_on_a_scale", "Coming_to_believe", "Expressing_publicly", "Request",
+                          "Control", "Supporting", "Defending", "Building", "Military_operation", "Self_motion",
+                          "GetReady", "Forming_relationships", "Becoming_a_member", "Action", "Removing",
+                          "Surrendering", "Agree_or_refuse_to_act", "Participation", "Deciding", "Education_teaching",
+                          "Emptying", "Getting", "Besieging", "Creating", "Process_end", "Body_movement", "Expansion",
+                          "Telling", "Change", "Legal_rulings", "Bearing_arms", "Giving", "Name_conferral", "Arranging",
+                          "Use_firearm", "Committing_crime", "Assistance", "Surrounding", "Quarreling",
+                          "Expend_resource", "Motion_directional", "Bringing", "Communication", "Containing",
+                          "Manufacturing", "Social_event", "Robbery", "Competition", "Writing", "Rescuing",
+                          "Judgment_communication", "Change_tool", "Hold", "Being_in_operation", "Recording",
+                          "Carry_goods", "Cost", "Departing", "GiveUp", "Change_of_leadership", "Escaping", "Aiming",
+                          "Hindering", "Preserving", "Create_artwork", "Openness", "Connect", "Reveal_secret",
+                          "Response", "Scrutiny", "Lighting", "Criminal_investigation", "Hiding_objects",
+                          "Confronting_problem", "Renting", "Breathing", "Patrolling", "Arrest", "Convincing",
+                          "Commerce_sell", "Cure", "Temporary_stay", "Dispersal", "Collaboration", "Extradition",
+                          "Change_sentiment", "Commitment", "Commerce_pay", "Filling", "Becoming", "Achieve",
+                          "Practice", "Cause_change_of_strength", "Supply", "Cause_to_amalgamate", "Scouring",
+                          "Violence", "Reforming_a_system", "Come_together", "Wearing", "Cause_to_make_progress",
+                          "Legality", "Employment", "Rite", "Publishing", "Adducing", "Exchange", "Ratification",
+                          "Sign_agreement", "Commerce_buy", "Imposing_obligation", "Rewards_and_punishments",
+                          "Institutionalization", "Testing", "Ingestion", "Labeling", "Kidnapping",
+                          "Submitting_documents", "Prison", "Justifying", "Emergency", "Terrorism", "Vocalizations",
+                          "Risk", "Resolve_problem", "Revenge", "Limiting", "Research", "Having_or_lacking_access",
+                          "Theft", "Incident", "Award"]
             with open(os.path.join(args.data_dir, f"{args.test_file}.jsonl"), "r") as fin:
-                #lines=fin.readlines()
                 for line in fin:
-                    doc=json.loads(line)
-                    res={}
-                    res['id']=doc['id']
-                    res['predictions']=[]
-                    for mention in doc['candidates']:
+                    doc = json.loads(line)
+                    res = {'id': doc['id'], 'predictions': []}
+                    for mention_idx, mention in enumerate(doc['candidates']):
                         try:
-                            if mention['offset'][1]>len(predictions[Cnt+mention['sent_id']]):
-                                logger.warning(f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])}, {len(predictions[Cnt+mention['sent_id']])}")
-                                res['predictions'].append({"id":mention['id'],"type_id":0})
+                            global_sent_id = sents_counter + mention['sent_id']
+                            if mention['offset'][1] > len(predictions[global_sent_id]):
+                                logger.warning(
+                                    f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])}, {len(predictions[global_sent_id])}")
+                                res['predictions'].append({"id": mention['id'], "type_id": 0})
+                                # DEBUG: there are a lot of mentions that are skipped like this
+                                if not wrote_debug_file:
+                                    with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
+                                        debug_dict = {
+                                            "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
+                                                f"Additional infos: \n"
+                                                f"{global_sent_id=}, {len(predictions)=}\n"
+                                                f"{predictions=}, {np.array(predictions).shape=}",
+                                            "doc": doc,
+                                            "mention": mention,
+                                            "sents_counter": sents_counter,
+                                            "predictions": predictions
+                                        }
+                                        pickle.dump(debug_dict, debug)
+                                    wrote_debug_file = True
+                                # END OF DEBUG
                                 continue
-                            is_NA=False if predictions[Cnt+mention['sent_id']][mention['offset'][0]].startswith("B") else True
+                            is_NA = False if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith(
+                                "B") else True
                             if not is_NA:
-                                Type=predictions[Cnt+mention['sent_id']][mention['offset'][0]][2:]
-                                for i in range(mention['offset'][0]+1,mention['offset'][1]):
-                                    if predictions[Cnt+mention['sent_id']][i][2:]!=Type:
-                                        is_NA=True
+                                Type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
+                                for i in range(mention['offset'][0] + 1, mention['offset'][1]):
+                                    if predictions[sents_counter + mention['sent_id']][i][2:] != Type:
+                                        is_NA = True
                                         break
                                 if not is_NA:
-                                    res['predictions'].append({"id":mention['id'],"type_id":mavenTypes.index(Type)})
+                                    res['predictions'].append({"id": mention['id'], "type_id": mavenTypes.index(Type)})
                             if is_NA:
-                                res['predictions'].append({"id":mention['id'],"type_id":0})
+                                res['predictions'].append({"id": mention['id'], "type_id": 0})
                         except:
-                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}', exc_info=True)
-                    writer.write(json.dumps(res)+"\n")
-                    Cnt+=len(doc['content'])
+                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}. '
+                                           f'Additional infos: \n'
+                                           f'{sents_counter + mention["sent_id"]=}, {len(predictions)=}\n'
+                                           f'{predictions=}',
+                                           exc_info=True)
+                    writer.write(json.dumps(res) + "\n")
+                    sents_counter += len(doc['content'])
     return results
 
 
