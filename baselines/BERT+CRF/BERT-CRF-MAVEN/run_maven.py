@@ -639,53 +639,31 @@ def main():
                     for mention_idx, mention in enumerate(mention_candidates):
                         try:
                             global_sent_id = sents_counter + mention['sent_id']
+                            # spacy token offset versus NLTK token offset
                             if mention['offset'][1] > len(predictions[global_sent_id]):
                                 logger.warning(
-                                    f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])}, {len(predictions[global_sent_id])}")
+                                    f"Candidate mention sent idx not in doc? "
+                                    f"{len(doc['content'][mention['sent_id']]['tokens'])=}, "
+                                    f"{len(predictions[global_sent_id])=}")
                                 res['predictions'].append({"id": mention['id'], "type_id": 0})
-                                # DEBUG: there are a lot of mentions that are skipped like this
-                                if not wrote_debug_file:
-                                    with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
-                                        debug_dict = {
-                                            "message":
-                                                f"Candidate mention sent idx not in doc? "
-                                                f"{len(doc['content'][mention['sent_id']]['tokens'])=}, "
-                                                f"{len(predictions[global_sent_id])=}",
-                                            "doc": doc,
-                                            "mention": mention,
-                                            "sents_counter": sents_counter,
-                                            "predictions": predictions
-                                        }
-                                        pickle.dump(debug_dict, debug)
-                                    wrote_debug_file = True
-                                # END OF DEBUG
-                                continue
-                            is_NA = False if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith(
-                                "B") else True
-                            if not is_NA:
-                                Type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
+                            if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith("B"):
+                                is_na = False
+                            else:
+                                is_na = True
+                            if not is_na:
+                                # spacy token offset versus NLTK token offset
+                                ed_type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
                                 for i in range(mention['offset'][0] + 1, mention['offset'][1]):
-                                    if predictions[sents_counter + mention['sent_id']][i][2:] != Type:
-                                        is_NA = True
+                                    if predictions[sents_counter + mention['sent_id']][i][2:] != ed_type:
+                                        is_na = True
                                         break
-                                if not is_NA:
-                                    res['predictions'].append({"id": mention['id'], "type_id": mavenTypes.index(Type)})
-                            if is_NA:
+                                if not is_na:
+                                    res['predictions'].append(
+                                        {"id": mention['id'], "type_id": mavenTypes.index(ed_type)}
+                                    )
+                            if is_na:
                                 res['predictions'].append({"id": mention['id'], "type_id": 0})
                         except:
-                            # DEBUG: there are a lot of mentions that are skipped like this
-                            if not wrote_debug_file:
-                                with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
-                                    debug_dict = {
-                                        "message": f"Error during labeling candidates for mention {mention} in doc {doc}.",
-                                        "doc": doc,
-                                        "mention": mention,
-                                        "sents_counter": sents_counter,
-                                        "predictions": predictions
-                                    }
-                                    pickle.dump(debug_dict, debug)
-                                wrote_debug_file = True
-                            # END OF DEBUG
                             logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}.',
                                            exc_info=True)
                     writer.write(json.dumps(res) + "\n")
