@@ -4,5 +4,6 @@ torch==2.3.1
 pandas
 nltk
 spacy
+stanza
 numpy<2.0
 tqdm
