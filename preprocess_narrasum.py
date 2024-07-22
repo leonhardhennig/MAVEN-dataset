@@ -7,28 +7,30 @@
 """
 import json
 import os
+import re
+
 import nltk
 import uuid
 import spacy
 import argparse
 import logging
+import stanza
 import pandas as pd
 
 from tqdm import tqdm
 from itertools import islice
 
-FORMAT = "%(message)s"
-logging.basicConfig(
-    level=logging.WARNING, format=FORMAT, datefmt="[%X]"
-)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def preprocess_narrasum_nltk_spacy(input_path, output_path, field, spacy_model="en_core_web_sm"):
     # Clément's version
 
     # spacy mainly for PoS tagging
-    # spacy.require_gpu()
+    if spacy_model == "en_core_web_trf":
+        spacy.prefer_gpu()
     try:
         nlp = spacy.load(spacy_model)
     except OSError:
@@ -103,14 +105,20 @@ def preprocess_narrasum_nltk_spacy(input_path, output_path, field, spacy_model="
 def get_next_batch(fp, batch_size=200):
     for batch in iter(lambda: tuple(islice(fp, batch_size)), ()):
         docs = [json.loads(d) for d in batch]
-        yield (
-            [(d["document"], {"id": d["id"]}) for d in docs],
-            [(d["summary"], {"id": d["id"]}) for d in docs]
-        )
+        yield docs
 
 
-def preprocess_narrasum_spacy(input_path, output_path, spacy_model="en_core_web_trf"):
-    # Leo's version: spaCy for everything
+def convert_to_regular_spaces(text):
+    # Define a regex pattern that includes all the special Unicode space characters.
+    unicode_spaces = r'[\u0020\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u202F\u205F\u3000]'
+    # Replace all occurrences of these characters with a regular space.
+    return re.sub(unicode_spaces, ' ', text)
+
+
+def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_core_web_trf", batch_size=100):
+    # Leo's version (but separate processing for document & summary) and a bug fix: spaCy for everything
+    if spacy_model == "en_core_web_trf":
+        spacy.prefer_gpu()
     try:
         nlp = spacy.load(spacy_model, disable=["attribute_ruler, lemmatizer, ner"])
     except OSError:
@@ -121,47 +129,94 @@ def preprocess_narrasum_spacy(input_path, output_path, spacy_model="en_core_web_
     for split in ["train", "test", "validation"]:
         logger.info(f'Preprocessing {split}')
         input_file = f"{input_path}/{split}.json"
-        output_file_sum = f"{output_path}/{split}_summary.jsonl"
-        output_file_doc = f"{output_path}/{split}_document.jsonl"
-        with open(output_file_sum, 'w') as f_out_sum:
-            with open(output_file_doc, 'w') as f_out_doc:
-                with open(input_file, 'r') as f_in:
-                    batch_size = 50
-                    for doc_tuples in tqdm(get_next_batch(f_in, batch_size=batch_size)):
-                        for field in ['document', 'summary']:
-                            idx = 0 if field == 'document' else 1
-                            spacy_doc_tuples = nlp.pipe(doc_tuples[idx], batch_size=batch_size, as_tuples=True)
-                            for spacy_doc, context in spacy_doc_tuples:
-                                candidates = []
-                                for i, sent in enumerate(spacy_doc.sents):
-                                    if len(sent) == 0 or len(sent.text.strip()) == 0:
-                                        logger.warning(f'empty sentence')
-                                        continue
-                                    for j, tok in enumerate(sent):
-                                        if tok.pos_ in ["NOUN", "VERB", "ADJ"]:
-                                            dic = {
-                                                "trigger-word": tok.text,
-                                                "sent_id": i,
-                                                "offset": [j, j + 1],
-                                                "id": str(uuid.uuid4()).replace("-", "")
-                                            }
-                                            candidates.append(dic)
-                                new_doc = {
-                                    "id": context["id"],
-                                    "candidates": candidates,
-                                    "content": [
-                                        {"sentence": s.text,
-                                         "tokens": [t.text for t in s]} for s in
-                                        spacy_doc.sents if len(sent) > 0 and len(sent.text.strip()) > 0
-                                    ]
+        output_file = f"{output_path}/{split}_{field}.jsonl"
+        with open(output_file, 'w') as f_out, open(input_file, 'r') as f_in:
+            for doc_batch in tqdm(get_next_batch(f_in, batch_size=batch_size)):
+                doc_batch_tuples = [(convert_to_regular_spaces(doc[field]), doc) for doc in doc_batch]
+                spacy_doc_tuples = nlp.pipe(doc_batch_tuples, batch_size=batch_size, as_tuples=True)
+                write_buffer = []
+                for spacy_doc, context in spacy_doc_tuples:
+                    candidates = []
+                    content = []
+                    sent_id = 0
+                    for sent in spacy_doc.sents:
+                        if len(sent) == 0 or len(sent.text.strip()) == 0:
+                            logger.warning(f"Empty {sent.text=} after sentence {sent_id=} in doc['id']={context['id']}")
+                            continue
+                        new_sent = {
+                            "sentence": sent.text,
+                            "tokens": []
+                        }
+                        for j, tok in enumerate(sent):
+                            new_sent["tokens"].append(tok.text)
+                            if tok.pos_ in ["NOUN", "VERB", "ADJ"]:
+                                dic = {
+                                    "trigger-word": tok.text,
+                                    "sent_id": sent_id,
+                                    "offset": [j, j + 1],
+                                    "id": str(uuid.uuid4()).replace("-", "")
                                 }
-                                if field == 'document':
-                                    f_out_doc.write(json.dumps(new_doc, ensure_ascii=False) + "\n")
-                                else:
-                                    f_out_sum.write(json.dumps(new_doc, ensure_ascii=False) + "\n")
-                    f_out_doc.flush()
-                    f_out_sum.flush()
+                                candidates.append(dic)
+                        content.append(new_sent)
+                        sent_id += 1
+                    new_doc = {
+                        "id": context["id"],
+                        "candidates": candidates,
+                        "content": content
+                    }
+                    write_buffer.append(json.dumps(new_doc, ensure_ascii=False) + "\n")
+                f_out.writelines(write_buffer)
+            f_out.flush()
     logger.info('Done')
+
+
+def preprocess_narrasum_stanza(input_path, output_path, field, batch_size=100):
+    # Use stanza's neural pipeline for preprocessing: slower, but more accurate than spacy
+    stanza.download("en", processors="tokenize, pos")
+    nlp = stanza.Pipeline("en", processors="tokenize, pos")
+    for split in ["train", "test", "validation"]:
+        logger.info(f"Preprocessing {split}")
+        input_file = f"{input_path}/{split}.json"
+        output_file = f"{output_path}/{split}_{field}.jsonl"
+        with open(output_file, 'w') as f_out, open(input_file, 'r') as f_in:
+            for doc_batch in tqdm(get_next_batch(f_in, batch_size=batch_size)):
+                texts = [convert_to_regular_spaces(doc[field]) for doc in doc_batch]
+                processed_doc_batch = nlp.bulk_process(texts)
+                for processed_doc, doc in zip(processed_doc_batch, doc_batch):
+                    candidates = []
+                    content = []
+                    sent_id = 0
+                    for sent in processed_doc.sentences:
+                        if (len(sent.text.strip()) == 0 or len(sent.words) == 0 or
+                                all(len(w.text.strip()) == 0 for w in sent.words)):
+                            logger.warning(f"Empty {sent.text=} after sentence {sent_id=} in {doc['id']=}")
+                            continue
+                        new_sent = {
+                            "sentence": sent.text,
+                            "tokens": []
+                        }
+                        for j, tok in enumerate(sent.words):
+                            # alternatively iterate over sent.tokens and access pos tag via token.words[0].upos
+                            token_text = tok.text
+                            new_sent["tokens"].append(token_text)
+                            pos_tag = tok.upos
+                            if pos_tag in ["NOUN", "VERB", "ADJ"]:
+                                dic = {
+                                    "trigger-word": token_text,
+                                    "sent_id": sent_id,
+                                    "offset": [j, j + 1],
+                                    "id": str(uuid.uuid4()).replace("-", "")
+                                }
+                                candidates.append(dic)
+                        content.append(new_sent)
+                        sent_id += 1
+                    new_doc = {
+                        "id": doc["id"],
+                        "candidates": candidates,
+                        "content": content
+                    }
+                    f_out.write(json.dumps(new_doc, ensure_ascii=False) + "\n")
+    logger.info("Done")
 
 
 def main():
@@ -193,13 +248,13 @@ def main():
         "--spacy_model",
         default="en_core_web_sm",
         type=str,
-        help="The spaCy model to use for dependency parsing, NER and lemmatization."
+        help="The spaCy model to use for (sentence segmentation,) tokenization, part of speech tagging."
     )
     parser.add_argument(
         "--preprocessing_method",
         default="preprocess_narrasum_nltk_spacy",
         type=str,
-        choices=["preprocess_narrasum_nltk_spacy", "preprocess_narrasum_spacy"],
+        choices=["preprocess_narrasum_nltk_spacy", "preprocess_narrasum_spacy", "preprocess_narrasum_stanza"],
         help="Which preprocessing function to use."
     )
     args = parser.parse_args()
@@ -208,11 +263,20 @@ def main():
     else:
         logger.warning("Overwriting existing output directory!")
 
+    logger.info(f"Preprocessing NarraSum data from {args.input_path} to {args.output_path} using "
+                f"{args.preprocessing_method}")
     if args.preprocessing_method == "preprocess_narrasum_spacy":
         preprocess_narrasum_spacy(
             input_path=args.input_path,
             output_path=args.output_path,
+            field=args.field,
             spacy_model=args.spacy_model
+        )
+    elif args.preprocessing_method == "preprocess_narrasum_stanza":
+        preprocess_narrasum_stanza(
+            input_path=args.input_path,
+            output_path=args.output_path,
+            field=args.field
         )
     else:
         preprocess_narrasum_nltk_spacy(
