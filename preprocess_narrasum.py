@@ -257,6 +257,12 @@ def main():
         choices=["preprocess_narrasum_nltk_spacy", "preprocess_narrasum_spacy", "preprocess_narrasum_stanza"],
         help="Which preprocessing function to use."
     )
+    parser.add_argument(
+        "--batch_size",
+        default=100,
+        type=int,
+        help="Batch size for processing documents with spacy/stanza."
+    )
     args = parser.parse_args()
     if not os.path.exists(args.output_path):
         os.makedirs(args.output_path)
@@ -270,13 +276,15 @@ def main():
             input_path=args.input_path,
             output_path=args.output_path,
             field=args.field,
-            spacy_model=args.spacy_model
+            spacy_model=args.spacy_model,
+            batch_size=args.batch_size
         )
     elif args.preprocessing_method == "preprocess_narrasum_stanza":
         preprocess_narrasum_stanza(
             input_path=args.input_path,
             output_path=args.output_path,
-            field=args.field
+            field=args.field,
+            batch_size=args.batch_size
         )
     else:
         preprocess_narrasum_nltk_spacy(

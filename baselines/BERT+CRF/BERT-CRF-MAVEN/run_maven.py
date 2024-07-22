@@ -592,7 +592,6 @@ def main():
                                        filename=args.test_file)
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
-        wrote_debug_file = False
         with open(output_test_predictions_file, "w") as writer:
             mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
                           "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
