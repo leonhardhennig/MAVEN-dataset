@@ -251,7 +251,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, filename,
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
+    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, num_workers=args.num_workers)
 
     # multi-gpu evaluate
     if args.n_gpu > 1:
@@ -412,7 +412,8 @@ def main():
                         help="Whether to run evaluation during training at each logging step.")
     parser.add_argument("--do_lower_case", action="store_true",
                         help="Set this flag if you are using an uncased model.")
-
+    parser.add_argument("--num_workers", default=0, type=int,
+                        help="Number of subprocesses for data loading.")
     parser.add_argument("--per_gpu_train_batch_size", default=8, type=int,
                         help="Batch size per GPU/CPU for training.")
     parser.add_argument("--per_gpu_eval_batch_size", default=8, type=int,
@@ -638,7 +639,6 @@ def main():
                     for mention_idx, mention in enumerate(mention_candidates):
                         try:
                             global_sent_id = sents_counter + mention['sent_id']
-                            # spacy token offset versus NLTK token offset
                             if mention['offset'][1] > len(predictions[global_sent_id]):
                                 logger.warning(
                                     f"Candidate mention sent idx not in doc? "
@@ -650,7 +650,6 @@ def main():
                             else:
                                 is_na = True
                             if not is_na:
-                                # spacy token offset versus NLTK token offset
                                 ed_type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
                                 for i in range(mention['offset'][0] + 1, mention['offset'][1]):
                                     if predictions[sents_counter + mention['sent_id']][i][2:] != ed_type:
