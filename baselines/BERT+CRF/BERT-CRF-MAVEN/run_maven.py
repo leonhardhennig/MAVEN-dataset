@@ -593,6 +593,7 @@ def main():
                                        filename=args.test_file)
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
+        wrote_debug_file = False
         with open(output_test_predictions_file, "w") as writer:
             mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
                           "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
@@ -645,10 +646,24 @@ def main():
                                     f"{len(doc['content'][mention['sent_id']]['tokens'])=}, "
                                     f"{len(predictions[global_sent_id])=}")
                                 res['predictions'].append({"id": mention['id'], "type_id": 0})
-                            if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith("B"):
-                                is_na = False
-                            else:
-                                is_na = True
+                                # DEBUG: there are a lot of mentions that are skipped like this
+                                if not wrote_debug_file:
+                                    with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
+                                        debug_dict = {
+                                            "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
+                                                f"Additional infos: \n"
+                                                f"{global_sent_id=}, {len(predictions)=}",
+                                            "doc": doc,
+                                            "mention": mention,
+                                            "sents_counter": sents_counter,
+                                            "predictions": predictions
+                                        }
+                                        pickle.dump(debug_dict, debug)
+                                    wrote_debug_file = True
+                                # END OF DEBUG
+                                continue
+                            is_na = False if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith(
+                                "B") else True
                             if not is_na:
                                 ed_type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
                                 for i in range(mention['offset'][0] + 1, mention['offset'][1]):
@@ -656,12 +671,25 @@ def main():
                                         is_na = True
                                         break
                                 if not is_na:
-                                    res['predictions'].append(
-                                        {"id": mention['id'], "type_id": mavenTypes.index(ed_type)}
-                                    )
+                                    res['predictions'].append({"id": mention['id'], "type_id": mavenTypes.index(ed_type)})
                             if is_na:
                                 res['predictions'].append({"id": mention['id'], "type_id": 0})
                         except:
+                            # DEBUG: there are a lot of mentions that are skipped like this
+                            if not wrote_debug_file:
+                                with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
+                                    debug_dict = {
+                                        "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
+                                            f"Additional infos: \n"
+                                            f"{global_sent_id=}, {len(predictions)=}\n",
+                                        "doc": doc,
+                                        "mention": mention,
+                                        "sents_counter": sents_counter,
+                                        "predictions": predictions
+                                    }
+                                    pickle.dump(debug_dict, debug)
+                                wrote_debug_file = True
+                            # END OF DEBUG
                             logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}.',
                                            exc_info=True)
                     writer.write(json.dumps(res) + "\n")
