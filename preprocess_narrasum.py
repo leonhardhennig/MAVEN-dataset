@@ -20,9 +20,28 @@ import pandas as pd
 from tqdm import tqdm
 from itertools import islice
 
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def convert_to_regular_spaces(text):
+    # Define a regex pattern that includes all the special Unicode space characters.
+    unicode_spaces = r'[\u0020\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u202F\u205F\u3000]'
+    # Replace all occurrences of these characters with a regular space.
+    return re.sub(unicode_spaces, ' ', text)
+
+
+def is_empty_sentence(sentence):
+    tokens = sentence['tokens']
+    cleaned_sentence = convert_to_regular_spaces(sentence['sentence'])
+    cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
+    cleaned_tokens = [token for token in cleaned_tokens if len(token) > 0]
+    if len(cleaned_tokens) == 0 or len(cleaned_sentence.strip()) == 0:
+        return True
+    else:
+        return False
 
 
 def preprocess_narrasum_nltk_spacy(input_path, output_path, field, spacy_model="en_core_web_sm"):
@@ -108,13 +127,6 @@ def get_next_batch(fp, batch_size=200):
         yield docs
 
 
-def convert_to_regular_spaces(text):
-    # Define a regex pattern that includes all the special Unicode space characters.
-    unicode_spaces = r'[\u0020\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u202F\u205F\u3000]'
-    # Replace all occurrences of these characters with a regular space.
-    return re.sub(unicode_spaces, ' ', text)
-
-
 def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_core_web_trf", batch_size=100):
     # Leo's version (but separate processing for document & summary) and a bug fix: spaCy for everything
     if spacy_model == "en_core_web_trf":
@@ -187,8 +199,7 @@ def preprocess_narrasum_stanza(input_path, output_path, field, batch_size=100):
                     content = []
                     sent_id = 0
                     for sent in processed_doc.sentences:
-                        if (len(sent.text.strip()) == 0 or len(sent.words) == 0 or
-                                all(len(w.text.strip()) == 0 for w in sent.words)):
+                        if is_empty_sentence(sent):
                             logger.warning(f"Empty {sent.text=} after sentence {sent_id=} in {doc['id']=}")
                             continue
                         new_sent = {
