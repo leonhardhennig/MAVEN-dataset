@@ -146,7 +146,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
-    set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
+    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -591,109 +591,101 @@ def main():
         model.to(args.device)
         result, predictions = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="test",
                                        filename=args.test_file)
+        with open(os.path.join(args.output_dir, f"raw_predictions_{args.test_file}.jsonl"), "w") as f:
+            # In case there is some issue when trying to merge the predictions with the original documents
+            # we can reuse the raw predictions
+            for pred in predictions:
+                f.write(json.dumps(pred) + "\n")
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, f"predictions_{args.test_file}.jsonl")
-        wrote_debug_file = False
-        with open(output_test_predictions_file, "w") as writer:
-            mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
-                          "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
-                          "Perception_active", "Presence", "Influence", "Receiving", "Check", "Hostile_encounter",
-                          "Killing", "Conquering", "Releasing", "Attack", "Earnings_and_losses", "Choosing",
-                          "Traveling", "Recovering", "Using", "Coming_to_be", "Cause_to_be_included", "Process_start",
-                          "Change_event_time", "Reporting", "Bodily_harm", "Suspicion", "Statement",
-                          "Cause_change_of_position_on_a_scale", "Coming_to_believe", "Expressing_publicly", "Request",
-                          "Control", "Supporting", "Defending", "Building", "Military_operation", "Self_motion",
-                          "GetReady", "Forming_relationships", "Becoming_a_member", "Action", "Removing",
-                          "Surrendering", "Agree_or_refuse_to_act", "Participation", "Deciding", "Education_teaching",
-                          "Emptying", "Getting", "Besieging", "Creating", "Process_end", "Body_movement", "Expansion",
-                          "Telling", "Change", "Legal_rulings", "Bearing_arms", "Giving", "Name_conferral", "Arranging",
-                          "Use_firearm", "Committing_crime", "Assistance", "Surrounding", "Quarreling",
-                          "Expend_resource", "Motion_directional", "Bringing", "Communication", "Containing",
-                          "Manufacturing", "Social_event", "Robbery", "Competition", "Writing", "Rescuing",
-                          "Judgment_communication", "Change_tool", "Hold", "Being_in_operation", "Recording",
-                          "Carry_goods", "Cost", "Departing", "GiveUp", "Change_of_leadership", "Escaping", "Aiming",
-                          "Hindering", "Preserving", "Create_artwork", "Openness", "Connect", "Reveal_secret",
-                          "Response", "Scrutiny", "Lighting", "Criminal_investigation", "Hiding_objects",
-                          "Confronting_problem", "Renting", "Breathing", "Patrolling", "Arrest", "Convincing",
-                          "Commerce_sell", "Cure", "Temporary_stay", "Dispersal", "Collaboration", "Extradition",
-                          "Change_sentiment", "Commitment", "Commerce_pay", "Filling", "Becoming", "Achieve",
-                          "Practice", "Cause_change_of_strength", "Supply", "Cause_to_amalgamate", "Scouring",
-                          "Violence", "Reforming_a_system", "Come_together", "Wearing", "Cause_to_make_progress",
-                          "Legality", "Employment", "Rite", "Publishing", "Adducing", "Exchange", "Ratification",
-                          "Sign_agreement", "Commerce_buy", "Imposing_obligation", "Rewards_and_punishments",
-                          "Institutionalization", "Testing", "Ingestion", "Labeling", "Kidnapping",
-                          "Submitting_documents", "Prison", "Justifying", "Emergency", "Terrorism", "Vocalizations",
-                          "Risk", "Resolve_problem", "Revenge", "Limiting", "Research", "Having_or_lacking_access",
-                          "Theft", "Incident", "Award"]
-            with open(os.path.join(args.data_dir, f"{args.test_file}.jsonl"), "r") as fin:
-                sents_counter = 0
-                for line in fin:
-                    doc = json.loads(line)
-                    res = {'id': doc['id'], 'predictions': []}
-                    # Find empty sentences and adjust the sentence ids of the candidates
-                    mention_candidates = doc['candidates']
-                    for sent_idx, sent in enumerate(doc['content']):
-                        if is_empty_sentence(sent):
-                            for mention in mention_candidates:
-                                if mention['sent_id'] > sent_idx:
-                                    mention['sent_id'] -= 1
-                    for mention_idx, mention in enumerate(mention_candidates):
-                        try:
-                            global_sent_id = sents_counter + mention['sent_id']
-                            if mention['offset'][1] > len(predictions[global_sent_id]):
-                                logger.warning(
-                                    f"Candidate mention sent idx not in doc? "
-                                    f"{len(doc['content'][mention['sent_id']]['tokens'])=}, "
-                                    f"{len(predictions[global_sent_id])=}")
-                                res['predictions'].append({"id": mention['id'], "type_id": 0})
-                                # DEBUG: there are a lot of mentions that are skipped like this
-                                if not wrote_debug_file:
-                                    with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
-                                        debug_dict = {
-                                            "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
-                                                f"Additional infos: \n"
-                                                f"{global_sent_id=}, {len(predictions)=}",
-                                            "doc": doc,
-                                            "mention": mention,
-                                            "sents_counter": sents_counter,
-                                            "predictions": predictions
-                                        }
-                                        pickle.dump(debug_dict, debug)
-                                    wrote_debug_file = True
-                                # END OF DEBUG
-                                continue
-                            is_na = False if predictions[sents_counter + mention['sent_id']][mention['offset'][0]].startswith(
-                                "B") else True
-                            if not is_na:
-                                ed_type = predictions[sents_counter + mention['sent_id']][mention['offset'][0]][2:]
-                                for i in range(mention['offset'][0] + 1, mention['offset'][1]):
-                                    if predictions[sents_counter + mention['sent_id']][i][2:] != ed_type:
-                                        is_na = True
+        mavenTypes = ["None", "Know", "Warning", "Catastrophe", "Placing", "Causation", "Arriving", "Sending",
+                      "Protest", "Preventing_or_letting", "Motion", "Damaging", "Destroying", "Death",
+                      "Perception_active", "Presence", "Influence", "Receiving", "Check", "Hostile_encounter",
+                      "Killing", "Conquering", "Releasing", "Attack", "Earnings_and_losses", "Choosing",
+                      "Traveling", "Recovering", "Using", "Coming_to_be", "Cause_to_be_included", "Process_start",
+                      "Change_event_time", "Reporting", "Bodily_harm", "Suspicion", "Statement",
+                      "Cause_change_of_position_on_a_scale", "Coming_to_believe", "Expressing_publicly", "Request",
+                      "Control", "Supporting", "Defending", "Building", "Military_operation", "Self_motion",
+                      "GetReady", "Forming_relationships", "Becoming_a_member", "Action", "Removing",
+                      "Surrendering", "Agree_or_refuse_to_act", "Participation", "Deciding", "Education_teaching",
+                      "Emptying", "Getting", "Besieging", "Creating", "Process_end", "Body_movement", "Expansion",
+                      "Telling", "Change", "Legal_rulings", "Bearing_arms", "Giving", "Name_conferral", "Arranging",
+                      "Use_firearm", "Committing_crime", "Assistance", "Surrounding", "Quarreling",
+                      "Expend_resource", "Motion_directional", "Bringing", "Communication", "Containing",
+                      "Manufacturing", "Social_event", "Robbery", "Competition", "Writing", "Rescuing",
+                      "Judgment_communication", "Change_tool", "Hold", "Being_in_operation", "Recording",
+                      "Carry_goods", "Cost", "Departing", "GiveUp", "Change_of_leadership", "Escaping", "Aiming",
+                      "Hindering", "Preserving", "Create_artwork", "Openness", "Connect", "Reveal_secret",
+                      "Response", "Scrutiny", "Lighting", "Criminal_investigation", "Hiding_objects",
+                      "Confronting_problem", "Renting", "Breathing", "Patrolling", "Arrest", "Convincing",
+                      "Commerce_sell", "Cure", "Temporary_stay", "Dispersal", "Collaboration", "Extradition",
+                      "Change_sentiment", "Commitment", "Commerce_pay", "Filling", "Becoming", "Achieve",
+                      "Practice", "Cause_change_of_strength", "Supply", "Cause_to_amalgamate", "Scouring",
+                      "Violence", "Reforming_a_system", "Come_together", "Wearing", "Cause_to_make_progress",
+                      "Legality", "Employment", "Rite", "Publishing", "Adducing", "Exchange", "Ratification",
+                      "Sign_agreement", "Commerce_buy", "Imposing_obligation", "Rewards_and_punishments",
+                      "Institutionalization", "Testing", "Ingestion", "Labeling", "Kidnapping",
+                      "Submitting_documents", "Prison", "Justifying", "Emergency", "Terrorism", "Vocalizations",
+                      "Risk", "Resolve_problem", "Revenge", "Limiting", "Research", "Having_or_lacking_access",
+                      "Theft", "Incident", "Award"]
+        with open(output_test_predictions_file, "w") as writer, \
+                open(os.path.join(args.data_dir, f"{args.test_file}.jsonl"), "r") as fin, \
+                open(os.path.join(args.data_dir, f"{args.test_file}_debug.jsonl"), "w") as debug_writer:
+            sents_counter = 0
+            for doc_idx, line in enumerate(fin):
+                doc = json.loads(line)
+                res = {"id": doc["id"], "predictions": []}
+                # Find empty sentences and adjust the sentence ids of the candidates
+                mention_candidates = doc["candidates"]
+                for sent_idx, sent in enumerate(doc["content"]):
+                    if is_empty_sentence(sent):
+                        logger.warning(f"Sentence {sent_idx} was empty. Adjusting sent_id for mentions that follow that sentence.")
+                        for mention in mention_candidates:
+                            if mention["sent_id"] > sent_idx:
+                                mention["sent_id"] -= 1
+                for mention_idx, mention in enumerate(mention_candidates):
+                    write_to_debug_file = False
+                    debug_message = ""
+                    try:
+                        global_sent_id = sents_counter + mention["sent_id"]
+                        mention_start, mention_end = mention["offset"][0], mention["offset"][1]
+                        if mention_end > len(predictions[global_sent_id]):
+                            # Sentence mismatch. Mention offsets are not in the sentence
+                            debug_message = f"Candidate mention sent idx not in doc? {len(doc['content'][mention['sent_id']]['tokens'])=}, {len(predictions[global_sent_id])=}"
+                            logger.warning(debug_message)
+                            res["predictions"].append({"id": mention["id"], "type_id": 0})
+                            write_to_debug_file = True
+                        else:
+                            predicted_tag = predictions[global_sent_id][mention_start]
+                            type_id = 0
+                            if predicted_tag.startswith("B"):
+                                event_type = predicted_tag[2:]
+                                type_id = mavenTypes.index(event_type)
+                                # Check if the rest of the mention tokens is also labeled with the same type
+                                for i in range(mention_start + 1, mention_end):
+                                    predicted_tag = predictions[global_sent_id][i]
+                                    if predicted_tag == "O" or predicted_tag[2:] != event_type:
+                                        type_id = 0
                                         break
-                                if not is_na:
-                                    res['predictions'].append({"id": mention['id'], "type_id": mavenTypes.index(ed_type)})
-                            if is_na:
-                                res['predictions'].append({"id": mention['id'], "type_id": 0})
-                        except:
-                            # DEBUG: there are a lot of mentions that are skipped like this
-                            if not wrote_debug_file:
-                                with open(os.path.join(args.output_dir, "debug.pickle"), "wb") as debug:
-                                    debug_dict = {
-                                        "message": f"Error during labeling candidates for mention {mention} in doc {doc}. "
-                                            f"Additional infos: \n"
-                                            f"{global_sent_id=}, {len(predictions)=}\n",
-                                        "doc": doc,
-                                        "mention": mention,
-                                        "sents_counter": sents_counter,
-                                        "predictions": predictions
-                                    }
-                                    pickle.dump(debug_dict, debug)
-                                wrote_debug_file = True
-                            # END OF DEBUG
-                            logger.warning(f'Error during labeling candidates for mention {mention} in doc {doc}.',
-                                           exc_info=True)
-                    writer.write(json.dumps(res) + "\n")
-                    sents_counter += len(doc['content'])
+                            res["predictions"].append({"id": mention["id"], "type_id": type_id})
+                    except Exception as e:
+                        debug_message = f"Error during labeling candidates for mention {mention} in doc {doc}.\n{str(e)}"
+                        logger.warning(debug_message, exc_info=True)
+                        write_to_debug_file = True
+                    if write_to_debug_file:
+                        debug_dict = {
+                            "message": debug_message,
+                            "global_sent_id": global_sent_id,
+                            "doc": doc,
+                            "doc_idx": doc_idx,
+                            "mention_idx": mention_idx,
+                            "mention": mention,
+                            "sents_counter": sents_counter,
+                            "predictions": predictions[global_sent_id]
+                        }
+                        debug_writer.write(json.dumps(debug_dict) + "\n")
+                writer.write(json.dumps(res) + "\n")
+                sents_counter += len(doc["content"])
     return results
 
 
