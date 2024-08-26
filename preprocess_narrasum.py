@@ -8,6 +8,7 @@
 import json
 import os
 import re
+from typing import Union, Dict, Any
 
 import nltk
 import uuid
@@ -16,6 +17,7 @@ import argparse
 import logging
 import stanza
 import pandas as pd
+from spacy.tokens import Span
 
 from tqdm import tqdm
 from itertools import islice
@@ -26,16 +28,24 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def convert_to_regular_spaces(text):
+def convert_to_regular_spaces(text, replace_double_newlines=False):
     # Define a regex pattern that includes all the special Unicode space characters.
     unicode_spaces = r'[\u0020\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u200B\u202F\u205F\u3000]'
     # Replace all occurrences of these characters with a regular space.
-    return re.sub(unicode_spaces, ' ', text)
+    modified_text = re.sub(unicode_spaces, ' ', text)
+    if replace_double_newlines:
+        modified_text = re.sub(r'\n\n', ' ', modified_text)
+    return modified_text
 
 
-def is_empty_sentence(sentence):
-    tokens = sentence['tokens']
-    cleaned_sentence = convert_to_regular_spaces(sentence['sentence'])
+def is_empty_sentence(sentence: Union[Span, Dict[str, Any]]):
+    if isinstance(sentence, Span):
+        sentence = {
+            "sentence": sentence.text,
+            "tokens": [tok.text for tok in sentence]
+        }
+    tokens = sentence["tokens"]
+    cleaned_sentence = convert_to_regular_spaces(sentence["sentence"])
     cleaned_tokens = [convert_to_regular_spaces(token).strip() for token in tokens]
     cleaned_tokens = [token for token in cleaned_tokens if len(token) > 0]
     if len(cleaned_tokens) == 0 or len(cleaned_sentence.strip()) == 0:
@@ -152,7 +162,7 @@ def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_co
                     content = []
                     sent_id = 0
                     for sent in spacy_doc.sents:
-                        if len(sent) == 0 or len(sent.text.strip()) == 0:
+                        if is_empty_sentence(sent):
                             logger.warning(f"Empty {sent.text=} after sentence {sent_id=} in doc['id']={context['id']}")
                             continue
                         new_sent = {
@@ -182,7 +192,7 @@ def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_co
     logger.info('Done')
 
 
-def preprocess_narrasum_stanza(input_path, output_path, field, batch_size=100):
+def preprocess_narrasum_stanza(input_path, output_path, field, batch_size=100, replace_double_newlines=False):
     # Use stanza's neural pipeline for preprocessing: slower, but more accurate than spacy
     stanza.download("en", processors="tokenize, pos")
     nlp = stanza.Pipeline("en", processors="tokenize, pos")
@@ -192,7 +202,7 @@ def preprocess_narrasum_stanza(input_path, output_path, field, batch_size=100):
         output_file = f"{output_path}/{split}_{field}.jsonl"
         with open(output_file, 'w') as f_out, open(input_file, 'r') as f_in:
             for doc_batch in tqdm(get_next_batch(f_in, batch_size=batch_size)):
-                texts = [convert_to_regular_spaces(doc[field]) for doc in doc_batch]
+                texts = [convert_to_regular_spaces(doc[field], replace_double_newlines) for doc in doc_batch]
                 processed_doc_batch = nlp.bulk_process(texts)
                 for processed_doc, doc in zip(processed_doc_batch, doc_batch):
                     candidates = []
@@ -273,6 +283,13 @@ def main():
         default=100,
         type=int,
         help="Batch size for processing documents with spacy/stanza."
+    )
+    parser.add_argument(
+        "--replace_double_newlines",
+        default=False,
+        action="store_true",
+        help="Replace double newlines with a space in the input text. This is useful for stanza processing because"
+             "it splits sentences on double newlines."
     )
     args = parser.parse_args()
     if not os.path.exists(args.output_path):
