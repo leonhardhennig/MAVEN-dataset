@@ -137,7 +137,8 @@ def get_next_batch(fp, batch_size=200):
         yield docs
 
 
-def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_core_web_trf", batch_size=100):
+def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_core_web_trf", batch_size=100,
+                              replace_double_newlines=False):
     # Leo's version (but separate processing for document & summary) and a bug fix: spaCy for everything
     if spacy_model == "en_core_web_trf":
         spacy.prefer_gpu()
@@ -154,7 +155,9 @@ def preprocess_narrasum_spacy(input_path, output_path, field, spacy_model="en_co
         output_file = f"{output_path}/{split}_{field}.jsonl"
         with open(output_file, 'w') as f_out, open(input_file, 'r') as f_in:
             for doc_batch in tqdm(get_next_batch(f_in, batch_size=batch_size)):
-                doc_batch_tuples = [(convert_to_regular_spaces(doc[field]), doc) for doc in doc_batch]
+                doc_batch_tuples = [
+                    (convert_to_regular_spaces(doc[field], replace_double_newlines), doc) for doc in doc_batch
+                ]
                 spacy_doc_tuples = nlp.pipe(doc_batch_tuples, batch_size=batch_size, as_tuples=True)
                 write_buffer = []
                 for spacy_doc, context in spacy_doc_tuples:
@@ -305,14 +308,16 @@ def main():
             output_path=args.output_path,
             field=args.field,
             spacy_model=args.spacy_model,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            replace_double_newlines=args.replace_double_newlines
         )
     elif args.preprocessing_method == "preprocess_narrasum_stanza":
         preprocess_narrasum_stanza(
             input_path=args.input_path,
             output_path=args.output_path,
             field=args.field,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            replace_double_newlines=args.replace_double_newlines
         )
     else:
         preprocess_narrasum_nltk_spacy(
